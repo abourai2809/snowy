@@ -92,6 +92,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--fb);font-size:14px;m
 .batch-card.teal{background:var(--tlll);border-color:rgba(123,191,191,.5)}
 .batch-rm{position:absolute;top:6px;right:8px;background:none;border:none;color:var(--tx3);cursor:pointer;font-size:18px;line-height:1;padding:0 4px;font-family:var(--fb)}
 .add-more-btn{width:100%;padding:11px;background:transparent;border:1.5px dashed var(--pkl);border-radius:10px;font-family:var(--fb);font-size:13px;font-weight:700;color:var(--pk);cursor:pointer;margin-bottom:10px}
+.disp-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#FFF8E1;color:#7A5800;border:1px solid #F9A825}
+.bkup-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:var(--tlll);color:var(--tldd);border:1px solid rgba(123,191,191,.5)}
 .cam-btn{width:100%;padding:12px;background:var(--tlll);border:1px solid rgba(123,191,191,.5);border-radius:10px;font-family:var(--fb);font-size:13px;font-weight:700;color:var(--tldd);cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px}
 .selfie-prev{width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-bottom:8px;display:block}
 .consumed-row{background:var(--aml);border:1px solid rgba(212,160,80,.4);border-radius:10px;padding:10px;margin-bottom:6px}
@@ -245,11 +247,11 @@ const DB={
     ]},
   ],
   requirements:[],
-  pendingDispatch:[],   // dispatches awaiting store acceptance
+  pendingDispatch:[],
   storeConsumed:{rajpur:[],malsi:[],mussoorie:[]},
-  storeTransfers:[],    // store-to-store or store-to-event transfers
-  returnToLab:[],       // items stores sent back to lab (pending lab acceptance)
-  labReturns:[],        // lab-accepted returns (need rechurn)
+  storeTransfers:[],
+  returnToLab:[],
+  labReturns:[],
   attendance:[
     {id:1,userId:2,date:'2025-05-06',checkIn:'09:05',checkOut:'18:35',hours:9.5,status:'approved',location:'rajpur',selfieIn:null,selfieOut:null},
     {id:2,userId:3,date:'2025-05-06',checkIn:'08:45',checkOut:'17:00',hours:8.25,status:'approved',location:'lab',selfieIn:null,selfieOut:null},
@@ -275,13 +277,12 @@ let S={
   notif:null,aiResp:null,aiLoading:false,
   addUserRole:'store_staff',evSelId:null,
   reqItems:[{flavour:'',pan:'full',qty:1}],
-  dispatchItems:[{flavour:'',pan:'full',panRole:'store',qty:1,weight:''}],
-  receivedItems:[{flavour:'',pan:'full',panRole:'display',qty:1,weight:'',mfgDate:new Date().toISOString().split('T')[0]}],
-  labGItems:[{flavour:'',pan:'full',qty:1,panRole:'store',weight:'',batchDate:new Date().toISOString().split('T')[0]}],
+  dispatchItems:[{flavour:'',pan:'full',qty:1,weight:''}],
+  receivedItems:[{flavour:'',pan:'full',qty:1,weight:''}],
+  labGItems:[{flavour:'',pan:'full',qty:1,weight:'',batchDate:new Date().toISOString().split('T')[0]}],
   rawItems:[{name:'',qty:'',unit:'kg',minQty:''}],
   labSupItems:[{item:'',qty:'',unit:'pcs',minQty:''}],
   storeSupItems:[{item:'',qty:'',unit:'pcs',minQty:''}],
-  storeGItems:[{flavour:'',pan:'full',panRole:'display',qty:1,weight:'',mfgDate:new Date().toISOString().split('T')[0]}],
   flavItems:[{name:'',seasonal:false,sorbet:false}],
 };
 
@@ -291,28 +292,17 @@ function ini(n){return n.split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase
 function rl(r){return({admin:'Admin',store_manager:'Store Manager',lab_manager:'Lab Manager',store_staff:'Store Staff',lab_staff:'Lab Staff'})[r]||r;}
 function pL(p){return p==='full'?'Full Pan':'Used Pan';}
 function pC(p){return p==='full'?'pfp':'pup';}
-function prL(r){return r==='display'?'Display':r==='backup'?'Backup':r==='event'?'Event':r==='store'?'Store':'Display';}
-function prC(r){return r==='display'?'disp-badge':r==='backup'?'bkup-badge':r==='event'?'bam2':r==='store'?'btl2':'disp-badge';}
+function prL(r){return r==='display'?'Display':r==='backup'?'Backup':r==='event'?'Event':r==='store'?'Store':'—';}
+function prC(r){return r==='display'?'disp-badge':r==='backup'?'bkup-badge':r==='event'?'bam2':r==='store'?'btl2':'bm';}
 function sN(id){return DB.stores.find(s=>s.id===id)?.name||id;}
 function evC(s){return s==='active'?'var(--tl)':s==='completed'?'#4CAF50':s==='cancelled'?'#EF5350':'var(--am)';}
 function canCreateEvent(r){return r==='admin'||r==='lab_manager'||r==='store_manager';}
-function needsSelfie(user){return user.role==='store_staff'||user.role==='store_manager';}
+function needsSelfie(user){return user.role!=='admin';}
 function todayStr(){return new Date().toISOString().split('T')[0];}
 function nowStr(){return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}
 function shiftStatus(hours){if(hours===null||hours===undefined)return null;if(hours>=9)return 'complete';if(hours>=8)return 'half';return 'incomplete';}
 function shiftLabel(hours){const s=shiftStatus(hours);if(!s)return '';if(s==='complete')return '&#10003; Shift complete';if(s==='half')return '&#9680; Half day';return '&#9888; Shift incomplete';}
 function shiftCls(hours){const s=shiftStatus(hours);if(s==='complete')return 'shift-done';if(s==='half')return 'shift-half';return 'shift-inc';}
-
-function calcSalary(userId,month){
-  const u=DB.users.find(u=>u.id===userId);if(!u)return 0;
-  const att=DB.attendance.filter(a=>a.userId===userId&&a.status==='approved'&&a.date.startsWith(month));
-  const offs=DB.weeklyOffs.filter(o=>o.userId===userId&&o.date.startsWith(month));
-  const full=att.filter(a=>shiftStatus(a.hours)==='complete').length;
-  const half=att.filter(a=>shiftStatus(a.hours)==='half').length;
-  const unusedOffs=Math.max(0,4-offs.length);
-  if(u.type==='monthly'){const dayRate=u.salary/26;return Math.round(u.salary+unusedOffs*dayRate);}
-  return Math.round(full*u.salary+half*u.salary*0.5+unusedOffs*u.salary);
-}
 
 function re(){
   const root=document.getElementById('app');
@@ -474,7 +464,7 @@ function rAttendToday(isAdmin){
       ${isSelfieUser?`
         ${S.selfieInData?`<img src="${S.selfieInData}" class="selfie-prev" alt="selfie"/><div class="al as mb">Selfie ready</div>`:''}
         <button class="cam-btn" onclick="openCam(false)">${S.selfieInData?'&#128247; Retake Selfie':'&#128247; Take Check-In Selfie'}</button>
-        ${isSelfieUser?`<div class="field"><label>Store you are at today</label><select id="ci-store">${DB.stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select></div>`:''}`:''}
+        ${(u.role==='store_staff'||u.role==='store_manager')?`<div class="field"><label>Store on duty today</label><select id="ci-store">${DB.stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select></div>`:''}`:''}
       <button onclick="doCheckIn()" style="width:100%;padding:16px;border-radius:var(--r);background:var(--pk);color:white;border:none;font-family:var(--ff);font-size:1.3rem;cursor:pointer;font-style:italic" ${isSelfieUser&&!S.selfieInData?'disabled style="width:100%;padding:16px;border-radius:var(--r);background:#ccc;color:#999;border:none;font-family:var(--ff);font-size:1.3rem;cursor:not-allowed;font-style:italic"':''}>Check In</button>
     `:`
       ${S.checkInTime?`<div class="al as mb">Checked in at ${S.checkInTime}${S.checkInStore?' · '+sN(S.checkInStore):''}</div>`:''}
@@ -505,35 +495,60 @@ function rAttendHistory(isAdmin){
 }
 
 function rAttendSalary(){
-  return `<div class="card"><div class="ct">Salary — May 2025</div>
+  const month='2025-05';
+  return `<div class="al ai" style="font-size:11px">&#8505; 4 weekly offs per month · 2 half-days = 1 day · absent days deducted · unused offs = bonus</div>
+  <div class="card"><div class="ct">Salary — May 2025</div>
     ${DB.users.filter(u=>u.role!=='admin'&&u.active).map(u=>{
-      const att=DB.attendance.filter(a=>a.userId===u.id&&a.status==='approved');
-      const full=att.filter(a=>shiftStatus(a.hours)==='complete').length;
-      const half=att.filter(a=>shiftStatus(a.hours)==='half').length;
-      const sal=u.type==='monthly'?u.salary:Math.round(full*u.salary+half*u.salary*0.5);
-      return`<div class="fbc" style="padding:9px 0;border-bottom:1px solid var(--bd)"><div><div style="font-weight:700;font-size:13px">${u.name}</div><div class="tm">${u.type==='monthly'?'Monthly':full+'d full + '+half+'d half'}</div></div><div style="text-align:right"><div style="font-family:var(--ff);font-size:1.1rem;color:var(--pk)">&#8377;${sal.toLocaleString('en-IN')}</div><span class="badge bg2">Payable</span></div></div>`;
+      const d=calcSalaryDetails(u.id,month);
+      const baseLbl=u.type==='monthly'?'Monthly':d.effectiveDays.toFixed(1)+'d effective';
+      return '<div style="padding:12px 0;border-bottom:1px solid var(--bd)">'
+        +'<div class="fbc mb"><div style="font-weight:700;font-size:13px">'+u.name+'</div>'
+        +'<div style="font-family:var(--ff);font-size:1.2rem;color:var(--pk)">&#8377;'+d.salary.toLocaleString('en-IN')+'</div></div>'
+        +'<div class="tm" style="margin-bottom:6px">'+baseLbl+' · '+d.fullDays+'d full + '+d.halfDays+' half'+(d.absentDays>0?' · '+d.absentDays+'d absent':'')+' · offs: '+d.takenOffs+'/4</div>'
+        +'<div style="display:flex;gap:5px;flex-wrap:wrap">'
+        +(d.bonusDays>0?'<span class="badge bg2">+'+d.bonusDays+' day'+(d.bonusDays!==1?'s':'')+' bonus</span>':'')
+        +(d.deductDays>0?'<span class="badge br2">-'+d.deductDays+' day'+(d.deductDays!==1?'s':'')+' deducted</span>':'')
+        +'<span class="badge bg2">Payable</span>'
+        +'</div></div>';
     }).join('')}
   </div>`;
 }
-
 function rWeeklyOff(){
-  const u=S.user;
+  const u=S.user;const month='2025-05';
   const myOffs=DB.weeklyOffs.filter(o=>o.userId===u.id);
-  const monthOffs=myOffs.filter(o=>o.date.startsWith('2025-05'));
-  return `<div class="al ai">&#127774; 4 weekly offs allowed per month.</div>
-  <div class="card"><div class="ct">Mark weekly off</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-weight:700;color:var(--pk)">${monthOffs.length}/4 used this month</span>
-    </div>
-    ${monthOffs.length<4?`<div class="field"><label>Date</label><input type="date" id="off-date" value="${todayStr()}"/></div>
-    <button class="bp bw" onclick="markOff()">Mark Weekly Off</button>`:`<div class="al aw">All 4 offs used this month.</div>`}
+  const monthOffs=myOffs.filter(o=>o.date.startsWith(month));
+  const allowedOffs=4; // fixed 4 weekly offs per month
+  const takenOffs=monthOffs.length;
+  const remaining=allowedOffs-takenOffs;
+  const d=calcSalaryDetails(u.id,month);
+  return `<div class="al ai">&#127774; 4 weekly offs per month. Absent days and excess offs are deducted from salary.</div>
+  <div class="stats">
+    <div class="sc"><div class="sv">${takenOffs}/4</div><div class="sl">Offs taken</div></div>
+    ${d.bonusDays>0?`<div class="sc tl"><div class="sv">+${d.bonusDays}</div><div class="sl">Unused offs</div></div>`:'<div class="sc am"><div class="sv">${d.absentDays||0}</div><div class="sl">Absent days</div></div>'}
+    ${d.deductDays>0?`<div class="sc" style="background:#FFEBEE;border-color:rgba(239,83,80,.3)"><div class="sv" style="color:#C62828">-${d.deductDays}</div><div class="sl">Days deducted</div></div>`:'<div class="sc tl"><div class="sv">${d.effectiveDays.toFixed(1)}</div><div class="sl">Days worked</div></div>'}
   </div>
-  <div class="card"><div class="ct">My weekly offs</div>
-    ${myOffs.length===0?`<p class="tm" style="padding:1rem 0;text-align:center">No offs marked</p>`:''}
-    ${myOffs.slice().reverse().map(o=>`<div class="fbc" style="padding:8px 0;border-bottom:1px solid var(--bd)"><span style="font-weight:600">${fd(o.date)}</span><span class="badge bg2">Weekly Off</span></div>`).join('')}
+  <div class="card"><div class="ct">Salary preview — May 2025</div>
+    <div class="fbc mb"><span class="tm">${d.fullDays} full + ${d.halfDays} half-days = ${d.effectiveDays.toFixed(1)} effective days</span></div>
+    <div class="fbc mb"><span class="tm">${takenOffs}/4 offs taken${d.absentDays>0?' · '+d.absentDays+' absent day'+(d.absentDays!==1?'s':''):''}</span></div>
+    ${d.bonusDays>0?`<div class="al as mb">+${d.bonusDays} unused off${d.bonusDays!==1?'s':''} bonus · &#8377;${Math.round(d.bonusDays*d.dayRate).toLocaleString('en-IN')} extra</div>`:''}
+    ${d.excessOffs>0?`<div class="al ad mb">-${d.excessOffs} excess off${d.excessOffs!==1?'s':''} · &#8377;${Math.round(d.excessOffs*d.dayRate).toLocaleString('en-IN')} deducted</div>`:''}
+    ${d.absentDays>0?`<div class="al ad mb">-${d.absentDays} absent day${d.absentDays!==1?'s':''} · &#8377;${Math.round(d.absentDays*d.dayRate).toLocaleString('en-IN')} deducted</div>`:''}
+    <div style="background:var(--pkll);border:1px solid var(--bd2);border-radius:10px;padding:14px;text-align:center">
+      <div class="tm" style="font-size:11px;margin-bottom:3px">Estimated salary</div>
+      <div style="font-family:var(--ff);font-size:2rem;color:var(--pkd)">&#8377;${d.salary.toLocaleString('en-IN')}</div>
+    </div>
+  </div>
+  <div class="card"><div class="ct">Mark weekly off</div>
+    ${remaining>0?`<div class="al as mb">${remaining} off${remaining!==1?'s':''} remaining this month</div>`:''}
+    ${takenOffs>=4?`<div class="al aw mb">4 offs used this month${takenOffs>4?' ('+d.excessOffs+' excess — will be deducted)':''}</div>`:''}
+    <div class="field"><label>Date</label><input type="date" id="off-date" value="${todayStr()}"/></div>
+    <button class="bp bw" onclick="markOff()">Mark Weekly Off</button>
+  </div>
+  <div class="card"><div class="ct">My weekly offs this month</div>
+    ${monthOffs.length===0?`<p class="tm" style="padding:1rem 0;text-align:center">No offs marked this month</p>`:''}
+    ${monthOffs.slice().reverse().map(o=>`<div class="fbc" style="padding:8px 0;border-bottom:1px solid var(--bd)"><span style="font-weight:600">${fd(o.date)}</span><span class="badge bg2">Weekly Off</span></div>`).join('')}
   </div>`;
 }
-
 function rLab(){
   const r=S.user.role;
   const canEdit=r==='admin'||r==='lab_manager';
@@ -542,13 +557,12 @@ function rLab(){
   return `<div class="sh"><h2 class="stt">Lab</h2></div>
   <div class="tabs">
     <button class="tab${lt==='gelato'?' act':''}" onclick="sst('lab','gelato')">Gelato</button>
-    <button class="tab${lt==='dispatch'?' act':''}" onclick="sst('lab','dispatch')">Dispatch</button>
-    <button class="tab${lt==='returns'?' act':''}" onclick="sst('lab','returns')">Returns${DB.returnToLab.filter(r=>r.status==='pending').length>0?` <span class="badge br2" style="font-size:9px">${DB.returnToLab.filter(r=>r.status==='pending').length}</span>`:''}</button>
+    <button class="tab${lt==='dispatch'?' act':''}" onclick="sst('lab','dispatch')">Dispatched</button>
     <button class="tab${lt==='raw'?' act':''}" onclick="sst('lab','raw')">Raw</button>
     <button class="tab${lt==='supplies'?' act':''}" onclick="sst('lab','supplies')">Supplies</button>
     ${canEdit?`<button class="tab${lt==='flavours'?' act':''}" onclick="sst('lab','flavours')">Flavours</button>`:''}
   </div>
-  ${lt==='gelato'?rLabG(canEdit):lt==='dispatch'?rLabD(canEdit):lt==='returns'?rLabReturns(canEdit):lt==='raw'?rLabR(canEdit):lt==='supplies'?rLabSup(isLabEmp):rFlavMgr(canEdit)}`;
+  ${lt==='gelato'?rLabG(canEdit):lt==='dispatch'?rLabD(canEdit):lt==='raw'?rLabR(canEdit):lt==='supplies'?rLabSup(isLabEmp):rFlavMgr(canEdit)}`;
 }
 
 function bCard(items,key,colorCls,buildFn){
@@ -574,19 +588,18 @@ function rLabG(canEdit){
         <div class="field" style="margin-bottom:0"><label>Qty (pans) *</label><input type="number" min="1" step="1" value="${item.qty||1}" onchange="upBI('labGItems',${i},'qty',parseInt(this.value)||1)"/></div>
       </div>
       <div class="r2 mt">
-        <div class="field" style="margin-bottom:0"><label>Pan role</label><select onchange="upBI('labGItems',${i},'panRole',this.value)"><option value="store"${item.panRole==='store'?' selected':''}>Store</option><option value="event"${item.panRole==='event'?' selected':''}>Event</option></select></div>
+        <div class="field" style="margin-bottom:0"><label>Weight (kg) <span style="font-weight:400;color:var(--tx3)">optional</span></label><input type="number" step="0.1" min="0.1" max="3.5" value="${item.weight||''}" placeholder="optional" onchange="upBI('labGItems',${i},'weight',this.value)"/></div>
         <div class="field" style="margin-bottom:0"><label>Batch date</label><input type="date" value="${item.batchDate||todayStr()}" onchange="upBI('labGItems',${i},'batchDate',this.value)"/></div>
       </div>
-      <div class="field mt"><label>Weight (kg) <span style="font-weight:400;color:var(--tx3)">optional</span></label><input type="number" step="0.1" min="0.1" max="3.5" value="${item.weight||''}" placeholder="optional" onchange="upBI('labGItems',${i},'weight',this.value)"/></div>
     `)}
-    <button class="add-more-btn" onclick="addBI('labGItems',{flavour:'',pan:'full',qty:1,panRole:'store',weight:'',batchDate:'${todayStr()}'})">+ Add Flavour</button>
+    <button class="add-more-btn" onclick="addBI('labGItems',{flavour:'',pan:'full',qty:1,weight:'',batchDate:'${todayStr()}'})">+ Add Flavour</button>
     <button class="bp bw" onclick="submitLabGelato()">Save ${items.length} Batch${items.length!==1?'es':''}</button>
   </div>`:''}
   <div class="card"><div class="fbc mb"><div class="ct" style="margin-bottom:0">Lab gelato — ${tot.toFixed(1)}kg total</div></div>
     ${DB.labGelato.length===0?`<p class="tm" style="padding:1.5rem 0;text-align:center">No batches</p>`:''}
-    ${DB.labGelato.map(item=>{const old=daysOld(item.batchDate);const pct=item.weight>0?Math.round((item.available/item.weight)*100):100;const col=pct>60?'var(--tl)':pct>30?'var(--pk)':'#EF5350';const isEvent=item.panRole==='event';return`<div style="padding:11px 0;border-bottom:1px solid var(--bd)">
-      <div class="fbc mb"><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap"><span style="font-weight:700;font-size:14px">${item.flavour}</span>${old>3?`<span class="badge br2">Aging</span>`:''}${isEvent?`<span class="badge bam2">Event</span>`:''}</div>
-        <div style="text-align:right"><span style="font-family:var(--ff);font-size:1.1rem;color:var(--pk)">${item.qty||1}<span style="font-size:.75rem"> pan${(item.qty||1)!==1?'s':''}</span></span>${item.weight?`<span style="font-family:var(--ff);font-size:.9rem;color:var(--tx3)"> · ${item.available.toFixed(1)}kg</span>`:''}</div></div>
+    ${DB.labGelato.map(item=>{const old=daysOld(item.batchDate);const pct=item.weight>0?Math.round((item.available/item.weight)*100):100;const col=pct>60?'var(--tl)':pct>30?'var(--pk)':'#EF5350';return`<div style="padding:11px 0;border-bottom:1px solid var(--bd)">
+      <div class="fbc mb"><div><span style="font-weight:700;font-size:14px">${item.flavour}</span>${old>3?`<span class="badge br2" style="margin-left:5px">Aging</span>`:''}</div>
+        <span style="font-family:var(--ff);font-size:1.1rem;color:var(--pk)">${item.weight&&item.available!==null?item.available.toFixed(1)+'<span style="font-size:.75rem">kg</span>':'—'}&nbsp;<span style="font-size:.8rem;color:var(--tx3)">${item.qty||1} pan${(item.qty||1)!==1?'s':''}</span></span></div>
       <div class="fbc" style="margin-bottom:4px"><span class="${pC(item.pan)}">${pL(item.pan)}</span>
         <span class="tm" style="font-size:11px">${fd(item.batchDate)} · ${old}d${item.weight?' · '+pct+'% left':''}</span></div>
       ${item.weight?`<div class="prog"><div class="pf" style="width:${pct}%;background:${col}"></div></div>`:''}
@@ -595,22 +608,19 @@ function rLabG(canEdit){
 }
 
 function rLabD(canEdit){
-  const items=S.dispatchItems||[{flavour:'',pan:'full',panRole:'store',qty:1,weight:''}];
-  const allLab=DB.labGelato;
+  const items=S.dispatchItems||[{flavour:'',pan:'full',qty:1,weight:''}];
+  const avail=DB.labGelato.filter(i=>i.available>0);
   return `${canEdit?`<div class="card"><div class="fbc mb"><div class="ct" style="margin-bottom:0">Dispatch to store</div><span class="badge btl2">${items.length}</span></div>
     <div class="field mb"><label>To store *</label><select id="dp-store">${DB.stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select></div>
     ${bCard(items,'dispatchItems','teal',(item,i)=>`
-      <div class="field mb"><label>Flavour</label><select onchange="upBI('dispatchItems',${i},'flavour',this.value)"><option value="">Select</option>${allLab.map(f=>`<option value="${f.flavour}"${f.flavour===item.flavour?' selected':''}>${f.flavour}${f.available>0?' ('+f.available.toFixed(1)+'kg)':' (depleted)'}</option>`).join('')}</select></div>
+      <div class="field mb"><label>Flavour</label><select onchange="upBI('dispatchItems',${i},'flavour',this.value)"><option value="">Select</option>${avail.map(f=>`<option value="${f.flavour}"${f.flavour===item.flavour?' selected':''}>${f.flavour}${f.available!==null&&f.available!==undefined?' ('+f.available.toFixed(1)+'kg)':''}</option>`).join('')}</select></div>
       <div class="r2">
         <div class="field" style="margin-bottom:0"><label>Pan type</label><select onchange="upBI('dispatchItems',${i},'pan',this.value)"><option value="full"${item.pan==='full'?' selected':''}>Full Pan</option><option value="used"${item.pan==='used'?' selected':''}>Used Pan</option></select></div>
-        <div class="field" style="margin-bottom:0"><label>Pan role</label><select onchange="upBI('dispatchItems',${i},'panRole',this.value)"><option value="store"${(item.panRole||'store')==='store'?' selected':''}>Store</option><option value="event"${item.panRole==='event'?' selected':''}>Event</option></select></div>
-      </div>
-      <div class="r2 mt">
         <div class="field" style="margin-bottom:0"><label>Qty (pans) *</label><input type="number" min="1" step="1" value="${item.qty||1}" onchange="upBI('dispatchItems',${i},'qty',parseInt(this.value)||1)"/></div>
-        <div class="field" style="margin-bottom:0"><label>Weight (kg) <span style="font-weight:400;color:var(--tx3)">optional</span></label><input type="number" step="0.1" min="0.1" max="3.5" value="${item.weight||''}" placeholder="optional" onchange="upBI('dispatchItems',${i},'weight',this.value)"/></div>
       </div>
+      <div class="field mt"><label>Weight (kg) <span style="font-weight:400;color:var(--tx3)">optional</span></label><input type="number" step="0.1" min="0.1" max="3.5" value="${item.weight||''}" placeholder="optional" onchange="upBI('dispatchItems',${i},'weight',this.value)"/></div>
     `)}
-    <button class="add-more-btn" onclick="addBI('dispatchItems',{flavour:'',pan:'full',panRole:'store',qty:1,weight:''})">+ Add Flavour</button>
+    <button class="add-more-btn" onclick="addBI('dispatchItems',{flavour:'',pan:'full',qty:1,weight:''})">+ Add Flavour</button>
     <div class="field"><label>Notes (optional)</label><input type="text" id="dp-notes" placeholder="e.g. morning run"/></div>
     <button class="bp bw" onclick="submitDispatch()">Dispatch ${items.length} Flavour${items.length!==1?'s':''}</button>
   </div>`:''}
@@ -618,16 +628,12 @@ function rLabD(canEdit){
     ${DB.dispatches.length===0?`<p class="tm" style="padding:1.5rem 0;text-align:center">No dispatches yet</p>`:''}
     ${[...DB.dispatches].reverse().map(d=>`<div class="drow">
       <div class="fbc mb"><span style="font-weight:700;font-size:13px">${d.flavour}</span>
-        <div style="text-align:right"><span style="font-family:var(--ff);font-size:1rem;color:var(--tld)">${d.qty||1}<span style="font-size:.75rem"> pan${(d.qty||1)!==1?'s':''}</span></span>${d.weight?`<span style="font-family:var(--ff);font-size:.85rem;color:var(--tx3)"> · ${d.weight.toFixed(1)}kg</span>`:''}</div></div>
-      <div class="fbc" style="align-items:center;gap:5px;flex-wrap:wrap">
-        <div style="display:flex;gap:5px"><span class="${pC(d.pan)}">${pL(d.pan)}</span><span class="${prC(d.panRole||'store')}">${prL(d.panRole||'store')}</span>
-        <span class="badge ${d.status==='accepted'?'bg2':d.status==='rejected'?'br2':'bo'}">${d.status||'pending'}</span></div>
-        <span class="tm" style="font-size:11px">&#8594; ${sN(d.toStore)} · ${fd(d.date)}</span></div>
+        <span style="font-family:var(--ff);font-size:1rem;color:var(--tld)">${d.weight?d.weight.toFixed(1)+'kg':'—'}&nbsp;<span style="font-size:.75rem">${d.qty||1}×${pL(d.pan)}</span></span></div>
+      <div class="fbc" style="align-items:center"><span class="${pC(d.pan)}">${pL(d.pan)}</span><span class="tm" style="font-size:11px">&#8594; ${sN(d.toStore)} · ${fd(d.date)}</span></div>
       ${d.notes?`<div class="tm" style="font-size:11px;margin-top:3px">&#128196; ${d.notes}</div>`:''}
     </div>`).join('')}
   </div>`;
 }
-
 function rLabR(canEdit){
   const low=DB.labRaw.filter(i=>i.qty<=i.minQty);
   const items=S.rawItems||[{name:'',qty:'',unit:'kg',minQty:''}];
@@ -721,42 +727,42 @@ function rStores(){
   <div class="tabs">${DB.stores.map(s=>`<button class="tab${S.selStore===s.id?' act':''}" onclick="setS({selStore:'${s.id}'})">${s.name.split(' ')[0]}</button>`).join('')}</div>
   <div class="tabs">
     <button class="tab${lt==='gelato'?' act':''}" onclick="sst('store','gelato')">Gelato</button>
-    <button class="tab${lt==='pending'?' act':''}" onclick="sst('store','pending')">Incoming${DB.pendingDispatch.filter(d=>d.toStore===store.id).length>0?` <span class="badge br2" style="font-size:9px">${DB.pendingDispatch.filter(d=>d.toStore===store.id).length}</span>`:''}</button>
+    <button class="tab${lt==='incoming'?' act':''}" onclick="sst('store','incoming')">Incoming${DB.pendingDispatch.filter(d=>d.toStore===store.id).length>0?' ●':''}</button>
     <button class="tab${lt==='received'?' act':''}" onclick="sst('store','received')">Received</button>
     <button class="tab${lt==='supplies'?' act':''}" onclick="sst('store','supplies')">Supplies</button>
   </div>
-  ${lt==='gelato'?rStoreG(store,true):lt==='pending'?rStorePending(store,true):lt==='received'?rStoreR(store,true):rStoreSup(store,true,true)}`;
+  ${lt==='gelato'?rStoreG(store,true):lt==='incoming'?rStorePending(store,true):lt==='received'?rStoreR(store,true):rStoreSup(store,true,true)}`;
 }
 
 function rMyStore(){
   const u=S.user;
   const r=u.role;
   const isStoreManager=r==='store_manager';
-  // Default store = admin-assigned store (u.store), overridden only when checked into a different store
-  const defaultStore=u.store||DB.stores[0].id;
-  const activeStore=S.checkedIn&&S.checkInStore?S.checkInStore:defaultStore;
   let storeIds=[];
   if(r==='admin')storeIds=DB.stores.map(s=>s.id);
   else if(isStoreManager)storeIds=DB.stores.map(s=>s.id);
-  else storeIds=[activeStore];
+  else{
+    const activeStore=S.checkedIn&&S.checkInStore?S.checkInStore:u.store;
+    storeIds=activeStore?[activeStore]:[];
+  }
   const lt=S.subTab.store||'gelato';
-  const ctxId=isStoreManager||r==='admin'?(S.selStore||activeStore):activeStore;
+  const ctxId=isStoreManager||r==='admin'?(S.selStore||storeIds[0]):storeIds[0];
   const store=DB.stores.find(s=>s.id===ctxId)||DB.stores[0];
   const canEdit=true;
   return `<div class="sh"><h2 class="stt">${isStoreManager||r==='admin'?'Stores':store.name}</h2></div>
-  ${(isStoreManager||r==='admin')?`<div class="tabs">${DB.stores.map(s=>`<button class="tab${ctxId===s.id?' act':''}" onclick="setS({selStore:'${s.id}'})">${s.name.split(' ')[0]}</button>`).join('')}</div>`:''}
+  ${(isStoreManager||r==='admin')?`<div class="tabs">${DB.stores.map(s=>`<button class="tab${(S.selStore||storeIds[0])===s.id?' act':''}" onclick="setS({selStore:'${s.id}'})">${s.name.split(' ')[0]}</button>`).join('')}</div>`:''}
   <div class="tabs">
     <button class="tab${lt==='gelato'?' act':''}" onclick="sst('store','gelato')">Gelato</button>
-    <button class="tab${lt==='pending'?' act':''}" onclick="sst('store','pending')">Incoming${DB.pendingDispatch.filter(d=>d.toStore===ctxId).length>0?` <span class="badge br2" style="font-size:9px">${DB.pendingDispatch.filter(d=>d.toStore===ctxId).length}</span>`:''}</button>
+    <button class="tab${lt==='incoming'?' act':''}" onclick="sst('store','incoming')">Incoming${DB.pendingDispatch.filter(d=>d.toStore===ctxId).length>0?' ●':''}</button>
     <button class="tab${lt==='received'?' act':''}" onclick="sst('store','received')">Received</button>
     <button class="tab${lt==='supplies'?' act':''}" onclick="sst('store','supplies')">Supplies</button>
   </div>
-  ${lt==='gelato'?rStoreG(store,canEdit):lt==='pending'?rStorePending(store,canEdit):lt==='received'?rStoreR(store,canEdit):rStoreSup(store,canEdit,false)}`;
+  ${lt==='gelato'?rStoreG(store,canEdit):lt==='incoming'?rStorePending(store,canEdit):lt==='received'?rStoreR(store,canEdit):rStoreSup(store,canEdit,false)}`;
 }
 
 function rStoreG(store,canEdit){
   const inv=DB.storeGelato[store.id]||[];
-  const tot=inv.reduce((a,i)=>a+i.weight,0);
+  const tot=inv.reduce((a,i)=>a+(i.weight||0),0);
   const fps=inv.filter(i=>i.pan==='full').length;
   const ups=inv.filter(i=>i.pan==='used').length;
   const evGelato=DB.events.filter(e=>e.status!=='cancelled').flatMap(e=>e.gelato.filter(g=>g.storedAt===store.id).map(g=>({...g,eventName:e.name,eventStatus:e.status})));
@@ -764,114 +770,47 @@ function rStoreG(store,canEdit){
   <div class="stats"><div class="sc"><div class="sv">${tot.toFixed(1)}<span style="font-size:.9rem">kg</span></div><div class="sl">Total gelato</div></div>
   <div class="sc tl"><div class="sv">${inv.length}/${store.capacity}</div><div class="sl">Flavours</div></div></div>
   <div style="display:flex;gap:8px;margin-bottom:.8rem"><span class="pfp">${fps} Full Pan${fps!==1?'s':''}</span><span class="pup">${ups} Used Pan${ups!==1?'s':''}</span></div>
-  ${canEdit?`<div class="card"><div class="fbc mb"><div class="ct" style="margin-bottom:0">Add gelato to store</div><span class="badge bpk">${(S.storeGItems||[{flavour:'',pan:'full',panRole:'display',weight:'',mfgDate:new Date().toISOString().split('T')[0]}]).length}</span></div>
-    ${(S.storeGItems||[{flavour:'',pan:'full',panRole:'display',weight:'',mfgDate:new Date().toISOString().split('T')[0]}]).map((item,i)=>`<div class="batch-card">
-      <button class="batch-rm" onclick="rmBI('storeGItems',${i})">&#10005;</button>
-      <div style="font-weight:700;font-size:11px;color:var(--tx3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">Flavour ${i+1}</div>
-      <div class="field mb"><label>Flavour</label><select onchange="upBI('storeGItems',${i},'flavour',this.value)"><option value="">Select</option>${DB.flavours.map(f=>`<option${f.name===item.flavour?' selected':''}>${f.name}</option>`).join('')}</select></div>
-      <div class="r2">
-        <div class="field" style="margin-bottom:0"><label>Pan type</label><select onchange="upBI('storeGItems',${i},'pan',this.value)"><option value="full"${item.pan==='full'?' selected':''}>Full Pan</option><option value="used"${item.pan==='used'?' selected':''}>Used Pan</option></select></div>
-        <div class="field" style="margin-bottom:0"><label>Pan role</label><select onchange="upBI('storeGItems',${i},'panRole',this.value)"><option value="display"${item.panRole==='display'?' selected':''}>Display</option><option value="backup"${item.panRole==='backup'?' selected':''}>Backup</option><option value="event"${item.panRole==='event'?' selected':''}>Event</option></select></div>
-      </div>
-      <div class="r2 mt">
-        <div class="field" style="margin-bottom:0"><label>Qty (pans) *</label><input type="number" min="1" step="1" value="${item.qty||1}" onchange="upBI('storeGItems',${i},'qty',parseInt(this.value)||1)"/></div>
-        <div class="field" style="margin-bottom:0"><label>Mfg date</label><input type="date" value="${item.mfgDate||new Date().toISOString().split('T')[0]}" onchange="upBI('storeGItems',${i},'mfgDate',this.value)"/></div>
-      </div>
-      <div class="field mt"><label>Weight (kg) <span style="font-weight:400;color:var(--tx3)">optional</span></label><input type="number" step="0.1" min="0.1" max="3.5" value="${item.weight||''}" placeholder="optional" onchange="upBI('storeGItems',${i},'weight',this.value)"/></div>
-    </div>`).join('')}
-    <button class="add-more-btn" onclick="addBI('storeGItems',{flavour:'',pan:'full',panRole:'display',qty:1,weight:'',mfgDate:'${new Date().toISOString().split('T')[0]}'})">+ Add Flavour</button>
-    <button class="bp bw" onclick="submitStoreGelato('${store.id}')">Add ${(S.storeGItems||[{}]).length} Flavour${(S.storeGItems||[{}]).length!==1?'s':''} to Store</button>
+  ${canEdit?`<div class="card"><div class="ct">Add gelato to store</div>
+    <div class="field"><label>Flavour</label><select id="sg-fl"><option value="">Select</option>${DB.flavours.map(f=>`<option>${f.name}</option>`).join('')}</select></div>
+    <div class="r2">
+      <div class="field" style="margin-bottom:0"><label>Pan type</label><select id="sg-pan"><option value="full">Full Pan</option><option value="used">Used Pan</option></select></div>
+      <div class="field" style="margin-bottom:0"><label>Weight (kg)</label><input type="number" id="sg-wt" placeholder="0.0" step="0.1" min="0.1" max="3.5"/></div>
+    </div>
+    <div class="field mt"><label>Mfg date</label><input type="date" id="sg-dt" value="${new Date().toISOString().split('T')[0]}"/></div>
+    <button class="bp bw" onclick="addStoreG('${store.id}')">Add to Store</button>
   </div>`:''}
-  <div class="card"><div class="fbc mb"><div class="ct" style="margin-bottom:0">Store gelato</div></div>
+  <div class="card"><div class="ct">Store gelato</div>
     ${inv.length===0?`<p class="tm" style="padding:1.5rem 0;text-align:center">No gelato recorded</p>`:''}
-    ${inv.map((item,idx)=>{const old=daysOld(item.mfgDate);const isLow=item.weight>0&&item.weight<1.5;const pr=item.panRole||'display';return`<div style="padding:12px 0;border-bottom:1px solid var(--bd)">
-      <div class="fbc mb"><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap"><span style="font-weight:700">${item.flavour}</span>${isLow?`<span class="badge br2">Low</span>`:''}</div>
-        <div style="text-align:right"><span style="font-family:var(--ff);font-size:1.1rem;color:${isLow?'#EF5350':'var(--pk)'}">${item.qty||1}<span style="font-size:.75rem"> pan${(item.qty||1)!==1?'s':''}</span></span>${item.weight?`<span style="font-family:var(--ff);font-size:.9rem;color:var(--tx3)"> · ${item.weight.toFixed(1)}kg</span>`:''}</div></div>
-      <div class="fbc mb"><div style="display:flex;gap:5px"><span class="${pC(item.pan)}">${pL(item.pan)}</span><span class="${prC(pr)}">${prL(pr)}</span></div><span class="tm" style="font-size:11px">Made ${fd(item.mfgDate)} · ${old}d old</span></div>
-      ${canEdit?`<div style="display:flex;gap:5px;flex-wrap:wrap">
-        ${pr!=='display'?`<button class="bs2" style="font-size:10px;padding:4px 8px;color:var(--tld);border-color:rgba(74,143,143,.5)" onclick="togglePanRole('${store.id}',${idx},'display')">&#9654; Display</button>`:''}
-        ${pr!=='backup'?`<button class="bs2" style="font-size:10px;padding:4px 8px;color:#7A5800;border-color:rgba(249,168,37,.5)" onclick="togglePanRole('${store.id}',${idx},'backup')">&#9660; Backup</button>`:''}
-        ${pr!=='event'?`<button class="bs2" style="font-size:10px;padding:4px 8px;color:var(--amd);border-color:rgba(212,160,80,.5)" onclick="togglePanRole('${store.id}',${idx},'event')">&#127775; Event</button>`:''}
-        <button class="bs2" style="font-size:10px;padding:4px 8px" onclick="openStoreAction('${store.id}',${idx},'consume')">&#127944; Consumed</button>
-        <button class="bs2" style="font-size:10px;padding:4px 8px" onclick="openStoreAction('${store.id}',${idx},'transfer')">&#8652; Transfer</button>
-        <button class="bs2" style="font-size:10px;padding:4px 8px;color:#b03030;border-color:rgba(176,48,48,.3)" onclick="openStoreAction('${store.id}',${idx},'return')">&#8617; Return to Lab</button>
-      </div>`:''}
+    ${inv.map(item=>{const old=daysOld(item.mfgDate);const isLow=item.weight<1.5;return`<div style="padding:11px 0;border-bottom:1px solid var(--bd)">
+      <div class="fbc mb"><div><span style="font-weight:700">${item.flavour}</span>${isLow?`<span class="badge br2" style="margin-left:5px">Low</span>`:''}</div>
+        <span style="font-family:var(--ff);font-size:1.1rem;color:${isLow?'#EF5350':'var(--pk)'}">${item.weight?(item.weight.toFixed(1)+'<span style="font-size:.75rem">kg</span>'):'—'}</span></div>
+      <div class="fbc"><span class="${pC(item.pan)}">${pL(item.pan)}</span><span class="tm" style="font-size:11px">Made ${fd(item.mfgDate)} · ${old}d old</span></div>
     </div>`;}).join('')}
   </div>
   ${evGelato.length?`<div class="card"><div class="ct">Event gelato at this store</div>
     ${evGelato.map(g=>`<div style="padding:9px 0;border-bottom:1px solid var(--bd)">
-      <div class="fbc mb"><span style="font-weight:700;font-size:13px">${g.flavour}</span><div style="text-align:right"><span style="font-family:var(--ff);font-size:1rem;color:var(--am)">${g.qty||1}<span style="font-size:.75rem"> pan${(g.qty||1)!==1?'s':''}</span></span>${g.weight?`<span style="font-family:var(--ff);font-size:.85rem;color:var(--tx3)"> · ${(g.weight*(g.qty||1)).toFixed(1)}kg</span>`:''}</div></div>
+      <div class="fbc mb"><span style="font-weight:700;font-size:13px">${g.flavour}</span><span style="font-family:var(--ff);font-size:1rem;color:var(--am)">${g.weight?(g.weight*(g.qty||1)).toFixed(1)+'kg':'TBD'}</span></div>
       <div class="fbc"><span class="${pC(g.pan)}">${pL(g.pan)}</span><span class="badge" style="background:${evC(g.eventStatus)};color:white">${g.eventName.split(' ').slice(0,2).join(' ')}</span></div>
     </div>`).join('')}
   </div>`:''} `;
 }
 
-function rStorePending(store,canEdit){
-  const pending=DB.pendingDispatch.filter(d=>d.toStore===store.id);
-  return `<div class="card"><div class="ct">Incoming dispatches — accept to add to inventory</div>
-    ${pending.length===0?`<div class="al as">No pending dispatches for ${store.name}</div>`:''}
-    ${pending.map(d=>`<div class="drow" style="margin-bottom:8px">
-      <div class="fbc mb"><span style="font-weight:700;font-size:13px">${d.flavour}</span>
-        <div style="text-align:right"><span style="font-family:var(--ff);font-size:1rem;color:var(--tld)">${d.qty||1}<span style="font-size:.75rem"> pan${(d.qty||1)!==1?'s':''}</span></span>${d.weight?`<span style="font-family:var(--ff);font-size:.85rem;color:var(--tx3)"> · ${d.weight.toFixed(1)}kg</span>`:''}</div></div>
-      <div class="fbc mb" style="gap:5px"><div style="display:flex;gap:5px"><span class="${pC(d.pan)}">${pL(d.pan)}</span><span class="${prC(d.panRole||'display')}">${prL(d.panRole||'display')}</span></div>
-        <span class="tm" style="font-size:11px">From lab · ${fd(d.date)}</span></div>
-      ${d.notes?`<div class="tm" style="font-size:11px;margin-bottom:6px">&#128196; ${d.notes}</div>`:''}
-      ${canEdit?`<div style="display:flex;gap:6px"><button class="bt" onclick="acceptDispatch(${d.id},'${store.id}')">&#10003; Accept</button><button class="bd2c" onclick="rejectDispatch(${d.id})">Reject</button></div>`:''}
-    </div>`).join('')}
-  </div>`;
-}
-
-function rLabReturns(canEdit){
-  const pending=DB.returnToLab.filter(r=>r.status==='pending');
-  const accepted=DB.labReturns;
-  return `<div class="card"><div class="ct">Returns awaiting acceptance</div>
-    ${pending.length===0?`<p class="tm" style="padding:1rem 0;text-align:center">No pending returns</p>`:''}
-    ${pending.map(r=>`<div class="rrow" style="margin-bottom:8px">
-      <div class="fbc mb"><span style="font-weight:700;font-size:13px">${r.flavour}</span>
-        <div style="text-align:right"><span style="font-family:var(--ff);font-size:1rem;color:var(--pkd)">${r.qty||1}<span style="font-size:.75rem"> pan${(r.qty||1)!==1?'s':''}</span></span>${r.weight?`<span style="font-family:var(--ff);font-size:.85rem;color:var(--tx3)"> · ${r.weight.toFixed(1)}kg</span>`:''}</div></div>
-      <div class="fbc mb"><div style="display:flex;gap:5px"><span class="${pC(r.pan)}">${pL(r.pan)}</span></div><span class="tm" style="font-size:11px">From ${sN(r.fromStore)} · ${fd(r.date)}</span></div>
-      ${r.notes?`<div class="tm" style="font-size:11px;margin-bottom:6px">&#128196; ${r.notes}</div>`:''}
-      ${canEdit?`<div style="display:flex;gap:6px"><button class="bt" onclick="acceptReturn(${r.id})">&#10003; Accept for Rechurn</button><button class="bd2c" onclick="rejectReturn(${r.id})">Reject</button></div>`:''}
-    </div>`).join('')}
-  </div>
-  <div class="card"><div class="ct">Rechurn queue</div>
-    ${accepted.length===0?`<p class="tm" style="padding:1rem 0;text-align:center">Nothing to rechurn</p>`:''}
-    ${accepted.map((r,i)=>`<div class="rrow" style="margin-bottom:8px">
-      <div class="fbc mb"><div style="display:flex;align-items:center;gap:6px"><span style="font-weight:700;font-size:13px">${r.flavour}</span><span class="badge bo">Rechurn</span></div>
-        <div style="text-align:right"><span style="font-family:var(--ff);font-size:1rem;color:var(--pkd)">${r.qty||1}<span style="font-size:.75rem"> pan${(r.qty||1)!==1?'s':''}</span></span>${r.weight?`<span style="font-family:var(--ff);font-size:.85rem;color:var(--tx3)"> · ${r.weight.toFixed(1)}kg</span>`:''}</div></div>
-      <div class="fbc"><span class="${pC(r.pan)}">${pL(r.pan)}</span><span class="tm" style="font-size:11px">From ${sN(r.fromStore)} · ${fd(r.date)}</span></div>
-      ${canEdit?`<div class="mt"><button class="bt" onclick="markRechurned(${i})">&#10003; Rechurned</button></div>`:''}
-    </div>`).join('')}
-  </div>`;
-}
-
 function rStoreR(store,canEdit){
   const recv=DB.storeReceived[store.id]||[];
-  const items=S.receivedItems||[{flavour:'',pan:'full',panRole:'display',qty:1,weight:'',mfgDate:todayStr()}];
-  return `${canEdit?`<div class="card"><div class="fbc mb"><div class="ct" style="margin-bottom:0">Log received stock</div><span class="badge bpk">${items.length}</span></div>
-    ${items.map((item,i)=>`<div class="batch-card">
-      <button class="batch-rm" onclick="rmBI('receivedItems',${i})">&#10005;</button>
-      <div style="font-weight:700;font-size:11px;color:var(--tx3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">Flavour ${i+1}</div>
-      <div class="field mb"><label>Flavour</label><select onchange="upBI('receivedItems',${i},'flavour',this.value)"><option value="">Select</option>${DB.flavours.map(f=>`<option${f.name===item.flavour?' selected':''}>${f.name}</option>`).join('')}</select></div>
-      <div class="r2">
-        <div class="field" style="margin-bottom:0"><label>Pan type</label><select onchange="upBI('receivedItems',${i},'pan',this.value)"><option value="full"${item.pan==='full'?' selected':''}>Full Pan</option><option value="used"${item.pan==='used'?' selected':''}>Used Pan</option></select></div>
-        <div class="field" style="margin-bottom:0"><label>Pan role</label><select onchange="upBI('receivedItems',${i},'panRole',this.value)"><option value="display"${item.panRole==='display'?' selected':''}>Display</option><option value="backup"${item.panRole==='backup'?' selected':''}>Backup</option><option value="event"${item.panRole==='event'?' selected':''}>Event</option></select></div>
-      </div>
-      <div class="r2 mt">
-        <div class="field" style="margin-bottom:0"><label>Qty (pans) *</label><input type="number" min="1" step="1" value="${item.qty||1}" onchange="upBI('receivedItems',${i},'qty',parseInt(this.value)||1)"/></div>
-        <div class="field" style="margin-bottom:0"><label>Mfg date</label><input type="date" value="${item.mfgDate||todayStr()}" onchange="upBI('receivedItems',${i},'mfgDate',this.value)"/></div>
-      </div>
-      <div class="field mt"><label>Weight (kg) <span style="font-weight:400;color:var(--tx3)">optional</span></label><input type="number" step="0.1" min="0.1" max="3.5" value="${item.weight||''}" placeholder="optional" onchange="upBI('receivedItems',${i},'weight',this.value)"/></div>
-    </div>`).join('')}
-    <button class="add-more-btn" onclick="addBI('receivedItems',{flavour:'',pan:'full',panRole:'display',qty:1,weight:'',mfgDate:'${todayStr()}'})">+ Add Flavour</button>
-    <div class="field"><label>Notes (optional)</label><input type="text" id="rc-notes" placeholder="e.g. from morning dispatch"/></div>
-    <button class="bp bw" onclick="submitReceived('${store.id}')">Log ${items.length} Receipt${items.length!==1?'s':''}</button>
+  return `${canEdit?`<div class="card"><div class="ct">Log received stock</div>
+    <div class="field"><label>Flavour</label><select id="rc-fl"><option value="">Select</option>${DB.flavours.map(f=>`<option>${f.name}</option>`).join('')}</select></div>
+    <div class="r2">
+      <div class="field" style="margin-bottom:0"><label>Pan type</label><select id="rc-pan"><option value="full">Full Pan</option><option value="used">Used Pan</option></select></div>
+      <div class="field" style="margin-bottom:0"><label>Weight (kg)</label><input type="number" id="rc-wt" placeholder="kg" step="0.1" min="0.1"/></div>
+    </div>
+    <div class="field mt"><label>Notes</label><input type="text" id="rc-notes" placeholder="e.g. from lab dispatch"/></div>
+    <button class="bp bw" onclick="addRecv('${store.id}')">Log Receipt</button>
   </div>`:''}
   <div class="card"><div class="ct">Received log</div>
     ${recv.length===0?`<p class="tm" style="padding:1.5rem 0;text-align:center">No receipts yet</p>`:''}
     ${[...recv].reverse().map(r=>`<div class="rrow">
-      <div class="fbc mb"><span style="font-weight:700;font-size:13px">${r.flavour}</span><div style="text-align:right"><span style="font-family:var(--ff);font-size:1rem;color:var(--pkd)">${r.qty||1}<span style="font-size:.75rem"> pan${(r.qty||1)!==1?'s':''}</span></span>${r.weight?`<span style="font-family:var(--ff);font-size:.85rem;color:var(--tx3)"> · ${r.weight.toFixed(1)}kg</span>`:''}</div></div>
-      <div class="fbc" style="gap:5px"><div style="display:flex;gap:5px"><span class="${pC(r.pan)}">${pL(r.pan)}</span><span class="${prC(r.panRole||'display')}">${prL(r.panRole||'display')}</span></div><span class="tm" style="font-size:11px">${fd(r.date)}</span></div>
+      <div class="fbc mb"><span style="font-weight:700;font-size:13px">${r.flavour}</span><span style="font-family:var(--ff);font-size:1rem;color:var(--pkd)">${r.weight?r.weight.toFixed(1)+'<span style="font-size:.75rem">kg</span>':'—'}</span></div>
+      <div class="fbc"><span class="${pC(r.pan)}">${pL(r.pan)}</span><span class="tm" style="font-size:11px">Received ${fd(r.date)}</span></div>
       ${r.notes?`<div class="tm" style="font-size:11px;margin-top:3px">&#128196; ${r.notes}</div>`:''}
     </div>`).join('')}
   </div>`;
@@ -882,28 +821,20 @@ function rStoreSup(store,canEdit,showStorePicker){
   const ctxStore=DB.stores.find(s=>s.id===ctxId)||store;
   const sup=DB.storeSupplies[ctxStore.id]||[];
   const low=sup.filter(i=>i.qty<=i.minQty);
-  const existingNames=sup.map(i=>i.item);
-  const items=S.storeSupItems||[{item:'',qty:'',unit:'pcs',minQty:''}];
-  return `${showStorePicker?`<div class="field mb"><label>Store</label><select onchange="setS({supStoreCtx:this.value});S.storeSupItems=[{item:'',qty:'',unit:'pcs',minQty:''}];re()">${DB.stores.map(s=>`<option value="${s.id}"${s.id===ctxId?' selected':''}>${s.name}</option>`).join('')}</select></div>`:''}
+  const existingItems=sup.map(i=>i.item);
+  return `${showStorePicker?`<div class="field mb"><label>Viewing store</label><select onchange="setS({supStoreCtx:this.value})">${DB.stores.map(s=>`<option value="${s.id}"${s.id===ctxId?' selected':''}>${s.name}</option>`).join('')}</select></div>`:''}
   ${low.length?`<div class="al ad">&#9888; ${low.length} item(s) at/below minimum</div>`:''}
-  ${canEdit?`<div class="card"><div class="fbc mb"><div class="ct" style="margin-bottom:0">Update supplies</div><span class="badge bpk">${items.length}</span></div>
-    ${items.map((item,i)=>`<div class="batch-card">
-      <button class="batch-rm" onclick="rmBI('storeSupItems',${i})">&#10005;</button>
-      <div style="font-weight:700;font-size:11px;color:var(--tx3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">Item ${i+1}</div>
-      <div class="field mb"><label>Item</label><select onchange="onStoreSupSel(${i},this.value,'${ctxStore.id}')">
-        <option value="">-- Select or add new --</option>
-        ${existingNames.map(n=>`<option value="${n}"${n===item.item?' selected':''}>${n}</option>`).join('')}
-        <option value="__new__"${item.item==='__new__'?' selected':''}>+ New item</option>
-      </select></div>
-      ${item.item==='__new__'?`<div class="field mb"><label>New item name</label><input type="text" placeholder="e.g. Tasting Spoons" value="${item.newName||''}" onchange="upBI('storeSupItems',${i},'newName',this.value)"/></div>`:''}
-      <div class="r2">
-        <div class="field" style="margin-bottom:0"><label>Qty *</label><input type="number" min="0" step="1" value="${item.qty||''}" placeholder="Quantity" onchange="upBI('storeSupItems',${i},'qty',this.value)"/></div>
-        <div class="field" style="margin-bottom:0"><label>Unit</label><select onchange="upBI('storeSupItems',${i},'unit',this.value)">${['pcs','kg','g','ml','litres','rolls'].map(u=>`<option${u===item.unit?' selected':''}>${u}</option>`).join('')}</select></div>
-      </div>
-      <div class="field mt"><label>Min threshold</label><input type="number" min="0" step="1" value="${item.minQty||''}" placeholder="Min qty" onchange="upBI('storeSupItems',${i},'minQty',this.value)"/></div>
-    </div>`).join('')}
-    <button class="add-more-btn" onclick="addBI('storeSupItems',{item:'',qty:'',unit:'pcs',minQty:''})">+ Add Item</button>
-    <button class="bp bw" onclick="submitStoreSup('${ctxStore.id}')">Save ${items.length} Item${items.length!==1?'s':''}</button>
+  ${canEdit?`<div class="card"><div class="ct">Update supply</div>
+    <div class="field"><label>Select item</label><select id="si-sel" onchange="prefillStoreSup(this.value,'${ctxStore.id}')">
+      <option value="">-- Choose or add new --</option>
+      ${existingItems.map(n=>`<option value="${n}">${n}</option>`).join('')}
+      <option value="__new__">+ Add new item</option>
+    </select></div>
+    <div id="si-newname-wrap" style="display:none"><div class="field"><label>New item name</label><input type="text" id="si-newname" placeholder="e.g. Dry Fruits Toppings"/></div></div>
+    <div class="r2"><div class="field" style="margin-bottom:0"><label>Quantity</label><input type="number" id="si-qty" placeholder="0" min="0" step="1"/></div>
+    <div class="field" style="margin-bottom:0"><label>Unit</label><select id="si-unit"><option>pcs</option><option>kg</option><option>g</option><option>ml</option><option>litres</option><option>rolls</option></select></div></div>
+    <div class="field mt"><label>Min threshold</label><input type="number" id="si-min" placeholder="Min qty" min="0"/></div>
+    <button class="bp bw" onclick="saveStoreSup('${ctxStore.id}')">Save Supply</button>
   </div>`:''}
   <div class="card"><div class="ct">Supplies — ${ctxStore.name}</div>
     ${sup.length===0?`<p class="tm" style="padding:1.5rem 0;text-align:center">No supplies recorded</p>`:''}
@@ -974,12 +905,10 @@ function rEvGelato(ev,canEdit){
     ${ev.gelato.length===0?`<p class="tm" style="padding:1rem 0;text-align:center">No gelato added yet</p>`:''}
     ${ev.gelato.map(g=>`<div style="padding:10px 0;border-bottom:1px solid var(--bd)">
       <div class="fbc mb"><span style="font-weight:700;font-size:13px">${g.flavour}</span>
-        <div style="text-align:right">
-          <span style="font-family:var(--ff);font-size:1rem;color:var(--pk)">${g.qty||1}<span style="font-size:.75rem"> pan${(g.qty||1)!==1?'s':''}</span></span>
-          ${g.weight?`<span style="font-family:var(--ff);font-size:.85rem;color:var(--tx3)"> · ${(g.weight*(g.qty||1)).toFixed(1)}kg</span>`:'<span style="font-size:.8rem;color:var(--tx3)"> · TBD</span>'}
-        </div></div>
+        <span style="font-family:var(--ff);font-size:1.05rem;color:var(--pk)">${g.weight?(g.weight*(g.qty||1)).toFixed(1)+'<span style="font-size:.75rem">kg</span>':'<span style="font-size:.8rem;color:var(--tx3)">TBD</span>'}</span></div>
       <div class="fbc" style="align-items:center;gap:6px;flex-wrap:wrap">
         <span class="${pC(g.pan)}">${pL(g.pan)}</span>
+        <span style="background:var(--pkll);color:var(--pkdd);font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;border:1px solid var(--bd2)">${g.qty||1} pan${(g.qty||1)!==1?'s':''}</span>
         <span class="badge" style="background:${g.storedAt==='lab'?'var(--pkll)':'var(--tlll)'};color:${g.storedAt==='lab'?'var(--pkdd)':'var(--tldd)'}">&#128197; ${g.storedAt==='lab'?'Lab':sN(g.storedAt)}</span>
       </div>
     </div>`).join('')}
@@ -1018,12 +947,9 @@ function rEvConsumed(ev,canEdit){
   <div class="card"><div class="ct">Consumed log</div>
     ${ev.consumed.length===0?`<p class="tm" style="padding:1.5rem 0;text-align:center">No entries yet</p>`:''}
     ${ev.consumed.map(c=>`<div class="consumed-row">
-      <div class="fbc mb"><span style="font-weight:700;font-size:13px">${c.flavour}</span>
-        <div style="text-align:right">
-          <span style="font-family:var(--ff);font-size:1rem;color:var(--amd)">${c.qty||1}<span style="font-size:.75rem"> pan${(c.qty||1)!==1?'s':''}</span></span>
-          ${c.weight?`<span style="font-family:var(--ff);font-size:.85rem;color:var(--tx3)"> · ${(c.weight*(c.qty||1)).toFixed(1)}kg</span>`:'<span style="font-size:.8rem;color:var(--tx3)"> · TBD</span>'}
-        </div></div>
-      <div class="fbc" style="align-items:center;gap:6px"><span class="${pC(c.pan)}">${pL(c.pan)}</span></div>
+      <div class="fbc mb"><span style="font-weight:700;font-size:13px">${c.flavour}</span><span style="font-family:var(--ff);font-size:1rem;color:var(--amd)">${c.weight?(c.weight*(c.qty||1)).toFixed(1)+'<span style="font-size:.75rem">kg</span>':'TBD'}</span></div>
+      <div class="fbc" style="align-items:center;gap:6px"><span class="${pC(c.pan)}">${pL(c.pan)}</span>
+        <span style="background:var(--aml);color:var(--amd);font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;border:1px solid rgba(212,160,80,.4)">${c.qty||1} pan${(c.qty||1)!==1?'s':''}</span></div>
       ${c.notes?`<div class="tm" style="font-size:11px;margin-top:4px">&#128196; ${c.notes}</div>`:''}
     </div>`).join('')}
   </div>`;
@@ -1156,30 +1082,6 @@ function rModal(){
       <div class="flex gap2 mt"><button class="bp" style="flex:1" onclick="addUser()">Add member</button><button class="bs2" onclick="setS({modal:null})">Cancel</button></div>
     </div></div>`;
   }
-  if(S.modal==='storeAction'){
-    const {storeId,idx,action}=S.modalCtx||{};
-    const store=DB.stores.find(s=>s.id===storeId);
-    const inv=DB.storeGelato[storeId]||[];
-    const item=inv[idx];
-    if(!item)return '';
-    const titleMap={consume:'Mark Consumed',transfer:'Transfer',return:'Return to Lab'};
-    return `<div style="position:fixed;inset:0;z-index:200;background:rgba(60,20,20,.5);display:flex;align-items:flex-end;justify-content:center">
-    <div style="background:white;border-radius:var(--r) var(--r) 0 0;padding:1.5rem;width:100%;max-height:85vh;overflow-y:auto">
-      <div style="font-family:var(--ff);font-size:1.3rem;font-style:italic;margin-bottom:.3rem">${titleMap[action]}</div>
-      <div class="tm mb">${item.flavour} · ${item.qty||1} pan${(item.qty||1)!==1?'s':''}${item.weight?' · '+item.weight.toFixed(1)+'kg':''}</div>
-      <div class="field"><label>Qty (pans) *</label><input type="number" id="sa-qty" min="1" max="${item.qty||1}" step="1" value="${item.qty||1}"/></div>
-      <div class="field"><label>Weight (kg) <span style="font-weight:400;color:var(--tx3)">optional</span></label><input type="number" id="sa-wt" step="0.1" min="0" placeholder="optional"/></div>
-      ${action==='transfer'?`<div class="field"><label>Transfer to</label><select id="sa-dest">
-        ${DB.stores.filter(s=>s.id!==storeId).map(s=>`<option value="store:${s.id}">${s.name}</option>`).join('')}
-        ${DB.events.filter(e=>e.status==='active'||e.status==='upcoming').map(e=>`<option value="event:${e.id}">${e.name}</option>`).join('')}
-      </select></div>`:''}
-      <div class="field"><label>Notes</label><input type="text" id="sa-notes" placeholder="optional"/></div>
-      <div class="flex gap2 mt">
-        <button class="bp" style="flex:1" onclick="submitStoreAction()">Confirm</button>
-        <button class="bs2" onclick="setS({modal:null,modalCtx:null})">Cancel</button>
-      </div>
-    </div></div>`;
-  }
   if(S.modal==='camera'){
     return `<div style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem">
       <div style="background:white;border-radius:var(--r);padding:1rem;width:100%;max-width:360px">
@@ -1239,7 +1141,7 @@ function closeCam(){
 
 function setS(ns){Object.assign(S,ns);re();}
 function sst(a,v){S.subTab={...S.subTab,[a]:v};re();}
-function resetBatches(){S.reqItems=[{flavour:'',pan:'full',qty:1}];S.dispatchItems=[{flavour:'',pan:'full',panRole:'store',qty:1,weight:''}];S.receivedItems=[{flavour:'',pan:'full',panRole:'display',qty:1,weight:'',mfgDate:todayStr()}];S.labGItems=[{flavour:'',pan:'full',qty:1,panRole:'store',weight:'',batchDate:new Date().toISOString().split('T')[0]}];S.rawItems=[{name:'',qty:'',unit:'kg',minQty:''}];S.labSupItems=[{item:'',qty:'',unit:'pcs',minQty:''}];S.storeSupItems=[{item:'',qty:'',unit:'pcs',minQty:''}];S.storeGItems=[{flavour:'',pan:'full',panRole:'display',qty:1,weight:'',mfgDate:new Date().toISOString().split('T')[0]}];S.flavItems=[{name:'',seasonal:false,sorbet:false}];}
+function resetBatches(){S.reqItems=[{flavour:'',pan:'full',qty:1}];S.dispatchItems=[{flavour:'',pan:'full',qty:1,weight:''}];S.receivedItems=[{flavour:'',pan:'full',qty:1,weight:''}];S.labGItems=[{flavour:'',pan:'full',qty:1,weight:'',batchDate:new Date().toISOString().split('T')[0]}];S.rawItems=[{name:'',qty:'',unit:'kg',minQty:''}];S.labSupItems=[{item:'',qty:'',unit:'pcs',minQty:''}];S.storeSupItems=[{item:'',qty:'',unit:'pcs',minQty:''}];S.flavItems=[{name:'',seasonal:false,sorbet:false}];}
 function doLogin(){const p=document.getElementById('lp')?.value?.trim();const w=document.getElementById('lw')?.value?.trim();const u=DB.users.find(u=>u.phone===p&&u.pass===w&&u.active);if(u){S.user=u;S.page='app';S.tab='dash';resetBatches();re();}else alert('Invalid credentials.');}
 function ql(id){const u=DB.users.find(u=>u.id===id);if(u&&u.active){S.user=u;S.page='app';S.tab='dash';resetBatches();re();}}
 function doLogout(){if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}S.user=null;S.page='login';S.tab='dash';S.checkedIn=false;S.checkInTime=null;S.checkInStore=null;S.selfieInData=null;S.selfieOutData=null;resetBatches();re();}
@@ -1277,15 +1179,57 @@ function doCheckOut(){
 function approveAtt(id){const a=DB.attendance.find(a=>a.id===id);if(a)a.status='approved';showN('Attendance approved');re();}
 function rejectAtt(id){const a=DB.attendance.find(a=>a.id===id);if(a)a.status='rejected';showN('Attendance rejected');re();}
 
+/* 7-day week, 1 weekly off per week */
+function getWorkingDaysInMonth(month){
+  // Total calendar days minus the 4 fixed weekly offs
+  const [yr,mo]=month.split('-').map(Number);
+  return new Date(yr,mo,0).getDate()-4; // e.g. May=31-4=27 payable days max
+}
+function calcSalaryDetails(userId,month){
+  const u=DB.users.find(u=>u.id===userId);
+  if(!u)return{salary:0,effectiveDays:0,absentDays:0,bonusDays:0,deductDays:0,totalDeduct:0,fullDays:0,halfDays:0,allowedOffs:4,takenOffs:0,excessOffs:0,dayRate:0,payableDays:0};
+  const att=DB.attendance.filter(a=>a.userId===userId&&a.status==='approved'&&a.date.startsWith(month));
+  const offs=DB.weeklyOffs.filter(o=>o.userId===userId&&o.date.startsWith(month));
+  const fullDays=att.filter(a=>shiftStatus(a.hours)==='complete').length;
+  const halfDays=att.filter(a=>shiftStatus(a.hours)==='half').length;
+  // 2 half-days = 1 full day
+  const effectiveDays=fullDays+Math.floor(halfDays/2)+(halfDays%2===1?0.5:0);
+  const allowedOffs=4; // fixed: 4 weekly offs per month
+  const takenOffs=offs.length;
+  const excessOffs=Math.max(0,takenOffs-allowedOffs);
+  const unusedOffs=Math.max(0,allowedOffs-takenOffs); // unused offs = bonus day
+  // Working days = calendar days - 4 allowed offs
+  const calDays=new Date(parseInt(month.split('-')[0]),parseInt(month.split('-')[1]),0).getDate();
+  const expectedWorkDays=calDays-allowedOffs; // days employee should have worked
+  // Absent = expected work days - actual effective days worked - excess offs taken (already absent)
+  const absentDays=Math.max(0,expectedWorkDays-effectiveDays-takenOffs+allowedOffs);
+  const totalDeduct=excessOffs+absentDays; // total days to deduct
+  const dayRate=u.type==='monthly'?u.salary/26:u.salary;
+  let salary;
+  if(u.type==='monthly'){
+    // Monthly: base - deductions + unused off bonus
+    salary=u.salary-(totalDeduct*dayRate)+(unusedOffs*dayRate);
+  } else {
+    // Daily: pay for effective days only (no base)
+    salary=effectiveDays*dayRate-(excessOffs*dayRate);
+  }
+  const payableDays=u.type==='monthly'?null:effectiveDays;
+  return{
+    salary:Math.max(0,Math.round(salary)),effectiveDays,absentDays,bonusDays:unusedOffs,
+    deductDays:totalDeduct,excessOffs,fullDays,halfDays,allowedOffs,takenOffs,dayRate,
+    payableDays,calDays,expectedWorkDays
+  };
+}
+function calcSalary(userId,month){return calcSalaryDetails(userId,month).salary;}
+
 function markOff(){
   const d=document.getElementById('off-date')?.value;
   if(!d){showN('Select a date');return;}
-  const u=S.user;const month=d.substring(0,7);
-  const monthOffs=DB.weeklyOffs.filter(o=>o.userId===u.id&&o.date.startsWith(month));
-  if(monthOffs.length>=4){showN('Already used 4 offs this month');return;}
+  const u=S.user;const m=d.substring(0,7);
   if(DB.weeklyOffs.find(o=>o.userId===u.id&&o.date===d)){showN('Already marked off on this date');return;}
   DB.weeklyOffs.push({id:Date.now(),userId:u.id,date:d,name:u.name});
-  showN('Weekly off marked for '+fd(d));re();
+  const taken=DB.weeklyOffs.filter(o=>o.userId===u.id&&o.date.startsWith(m)).length;
+  showN(taken>4?'Off marked ('+taken+'/4 — excess offs will be deducted)':'Weekly off marked for '+fd(d));re();
 }
 
 /* ---- Generic batch item helpers ---- */
@@ -1303,7 +1247,7 @@ function submitLabGelato(){
     if(!item.flavour||!item.qty)return;
     const wt=item.weight?parseFloat(item.weight):null;
     if(wt!==null&&item.pan==='full'&&wt>3.5){showN('Full pan max 3.5kg: '+item.flavour);return;}
-    DB.labGelato.push({id:Date.now()+ok,flavour:item.flavour,batchDate:item.batchDate||todayStr(),pan:item.pan||'full',panRole:item.panRole||'store',qty:item.qty||1,weight:wt,available:wt});
+    DB.labGelato.push({id:Date.now()+ok,flavour:item.flavour,batchDate:item.batchDate||todayStr(),pan:item.pan||'full',qty:item.qty||1,weight:wt,available:wt});
     ok++;
   });
   if(ok===0){showN('Select at least one flavour');return;}
@@ -1380,16 +1324,16 @@ function submitDispatch(){
     const fl=item.flavour.replace(/\s*\(.*\)$/,'');
     const labItem=DB.labGelato.find(i=>i.flavour===fl);
     const wt=item.weight?parseFloat(item.weight):null;
-    const panRole=item.panRole||'store';
     if(labItem&&wt&&wt>labItem.available){showN('Insufficient stock: '+fl);return;}
     if(labItem&&wt)labItem.available=parseFloat((labItem.available-wt).toFixed(2));
     const dId=Date.now()+ok;
+    const panRole=item.panRole||'store';
     DB.dispatches.push({id:dId,flavour:fl,pan:item.pan,panRole,qty:item.qty||1,weight:wt,toStore:st,date:todayStr(),notes,loggedBy:S.user.name,status:'pending'});
     DB.pendingDispatch.push({id:dId,flavour:fl,pan:item.pan,panRole,qty:item.qty||1,weight:wt,toStore:st,date:todayStr(),notes,loggedBy:S.user.name});
     ok++;
   });
   if(ok===0){showN('Select at least one flavour');return;}
-  S.dispatchItems=[{flavour:'',pan:'full',panRole:'store',qty:1,weight:''}];
+  S.dispatchItems=[{flavour:'',pan:'full',qty:1,weight:''}];
   showN(ok+' dispatch'+(ok!==1?'es':'')+' logged → '+sN(st));re();
 }
 
@@ -1399,33 +1343,17 @@ function submitReceived(storeId){
     if(!item.flavour)return;
     const wt=item.weight?parseFloat(item.weight):null;
     if(!DB.storeReceived[storeId])DB.storeReceived[storeId]=[];
-    DB.storeReceived[storeId].push({id:Date.now()+ok,flavour:item.flavour,pan:item.pan,panRole:item.panRole||'display',qty:item.qty||1,weight:wt,mfgDate:item.mfgDate||todayStr(),date:todayStr(),notes});
-    // Also add to store gelato inventory
-    if(!DB.storeGelato[storeId])DB.storeGelato[storeId]=[];
-    DB.storeGelato[storeId].push({id:Date.now()+ok+500,flavour:item.flavour,mfgDate:item.mfgDate||todayStr(),pan:item.pan,panRole:item.panRole||'display',qty:item.qty||1,weight:wt||0});
+    DB.storeReceived[storeId].push({id:Date.now()+ok,flavour:item.flavour,pan:item.pan,qty:item.qty||1,weight:wt,date:todayStr(),notes});
     ok++;
   });
   if(ok===0){showN('Select at least one flavour');return;}
-  S.receivedItems=[{flavour:'',pan:'full',panRole:'display',qty:1,weight:'',mfgDate:todayStr()}];
+  S.receivedItems=[{flavour:'',pan:'full',qty:1,weight:''}];
   showN(ok+' receipt'+(ok!==1?'s':'')+' logged at '+sN(storeId));re();
 }
 
 function addFlavour(){showN('Use the Flavours tab batch form');}
 function rmFlavour(i){if(S.user.role!=='admin'){showN('Only admin can remove flavours');return;}DB.flavours.splice(i,1);showN('Flavour removed');re();}
-function submitStoreGelato(sid){
-  const items=S.storeGItems||[];let ok=0;
-  items.forEach(item=>{
-    if(!item.flavour||!item.mfgDate)return;
-    const wt=item.weight?parseFloat(item.weight):null;
-    if(wt!==null&&item.pan==='full'&&wt>3.5){showN('Full pan max 3.5kg: '+item.flavour);return;}
-    if(!DB.storeGelato[sid])DB.storeGelato[sid]=[];
-    DB.storeGelato[sid].push({id:Date.now()+ok,flavour:item.flavour,mfgDate:item.mfgDate,pan:item.pan||'full',panRole:item.panRole||'display',qty:item.qty||1,weight:wt||0});
-    ok++;
-  });
-  if(ok===0){showN('Select at least one flavour with a date');return;}
-  S.storeGItems=[{flavour:'',pan:'full',panRole:'display',qty:1,weight:'',mfgDate:new Date().toISOString().split('T')[0]}];
-  showN(ok+' flavour'+(ok!==1?'s':'')+' added to store');re();
-}
+function addStoreG(sid){const fl=document.getElementById('sg-fl')?.value;const pan=document.getElementById('sg-pan')?.value;const role=document.getElementById('sg-role')?.value||'display';const wt=parseFloat(document.getElementById('sg-wt')?.value);const dt=document.getElementById('sg-dt')?.value;if(!fl||!dt||isNaN(wt)||wt<=0){showN('Fill all fields');return;}if(pan==='full'&&wt>3.5){showN('Full pan max 3.5kg');return;}if(!DB.storeGelato[sid])DB.storeGelato[sid]=[];DB.storeGelato[sid].push({id:Date.now(),flavour:fl,mfgDate:dt,pan,panRole:role,weight:wt});showN('Added: '+fl+' ('+role+')');re();}
 function submitAllReqs(){const items=S.reqItems||[];const storeEl=document.getElementById('rq-st');const sid=storeEl?.value;const sn=DB.stores.find(s=>s.id===sid)?.name||sid;let ok=0;items.forEach(item=>{if(!item.flavour)return;DB.requirements.push({id:Date.now()+ok,store:sn,flavour:item.flavour,qty:item.qty||1,pan:item.pan||'full',date:todayStr(),status:'pending',employee:S.user.name});ok++;});if(ok===0){showN('Please select flavours for all items');return;}S.reqItems=[{flavour:'',pan:'full',qty:1}];showN(ok+' request'+(ok!==1?'s':'')+' submitted for '+sn);sst('reqs','view');}
 
 function addEvent(){const name=document.getElementById('ev-name')?.value?.trim();const client=document.getElementById('ev-client')?.value?.trim();const date=document.getElementById('ev-date')?.value;const loc=document.getElementById('ev-loc')?.value?.trim()||'';const notes=document.getElementById('ev-notes')?.value?.trim()||'';const paxRaw=document.getElementById('ev-pax')?.value;const pax=paxRaw?parseInt(paxRaw):null;if(!name||!client||!date){showN('Fill event name, client and date');return;}const ev={id:Date.now(),name,client,date,location:loc,status:'upcoming',notes,pax,gelato:[],consumed:[]};DB.events.push(ev);S.evSelId=ev.id;showN('Event created: '+name);sst('events','detail');}
@@ -1436,88 +1364,47 @@ function setEvSt(evId,status){const ev=DB.events.find(e=>e.id===evId);if(ev){ev.
 function deactivateUser(id){const u=DB.users.find(u=>u.id===id);if(u){u.active=false;showN(u.name+' removed from active team');re();}}
 function addUser(){const name=document.getElementById('nu-n')?.value?.trim();const phone=document.getElementById('nu-p')?.value?.trim();const pass=document.getElementById('nu-pw')?.value?.trim();const role=document.getElementById('nu-r')?.value;const store=document.getElementById('nu-st')?.value||null;const sal=parseFloat(document.getElementById('nu-s')?.value)||0;const type=document.getElementById('nu-t')?.value||'monthly';if(!name||!phone||phone.length!==10||!pass){showN('Fill name, 10-digit mobile and password');return;}if(DB.users.find(u=>u.phone===phone)){showN('Mobile number already registered');return;}DB.users.push({id:Date.now(),name,role,phone,pass,store,salary:sal,type,active:true});S.modal=null;S.addUserRole='store_staff';showN('Added: '+name);re();}
 
-function togglePanRole(storeId,idx,newRole){
-  const inv=DB.storeGelato[storeId]||[];
-  if(inv[idx]){inv[idx].panRole=newRole;showN('Pan moved to '+prL(newRole));re();}
-}
-
-function openStoreAction(storeId,idx,action){setS({modal:'storeAction',modalCtx:{storeId,idx,action}});}
-
-function submitStoreAction(){
-  const {storeId,idx,action}=S.modalCtx||{};
-  const inv=DB.storeGelato[storeId]||[];
-  const item=inv[idx];
-  if(!item)return;
-  const qty=parseInt(document.getElementById('sa-qty')?.value)||1;
-  const wt=parseFloat(document.getElementById('sa-wt')?.value)||null;
-  const notes=document.getElementById('sa-notes')?.value||'';
-  const destEl=document.getElementById('sa-dest');
-  const remaining=(item.qty||1)-qty;
-  if(action==='consume'){
-    if(!DB.storeConsumed[storeId])DB.storeConsumed[storeId]=[];
-    DB.storeConsumed[storeId].push({id:Date.now(),flavour:item.flavour,pan:item.pan,panRole:item.panRole,qty,weight:wt,date:todayStr(),notes});
-    if(remaining<=0)inv.splice(idx,1);else{inv[idx]={...item,qty:remaining,weight:item.weight&&wt?parseFloat((item.weight-wt).toFixed(2)):item.weight};};
-    showN(qty+' pan'+(qty!==1?'s':'')+' marked consumed');
-  } else if(action==='transfer'){
-    const dest=destEl?.value||'';
-    const [destType,destId]=dest.split(':');
-    DB.storeTransfers.push({id:Date.now(),flavour:item.flavour,pan:item.pan,panRole:item.panRole,qty,weight:wt,fromStore:storeId,destType,destId,date:todayStr(),notes});
-    if(destType==='store'){
-      // Add to destination store pending
-      DB.pendingDispatch.push({id:Date.now()+1,flavour:item.flavour,pan:item.pan,panRole:item.panRole||'display',qty,weight:wt,toStore:destId,date:todayStr(),notes,loggedBy:S.user.name,fromStore:storeId});
-    } else if(destType==='event'){
-      const ev=DB.events.find(e=>e.id===parseInt(destId));
-      if(ev)ev.gelato.push({flavour:item.flavour,pan:item.pan,qty,weight:wt,storedAt:storeId});
-    }
-    if(remaining<=0)inv.splice(idx,1);else inv[idx]={...item,qty:remaining};
-    showN(qty+' pan'+(qty!==1?'s':'')+' transferred');
-  } else if(action==='return'){
-    DB.returnToLab.push({id:Date.now(),flavour:item.flavour,pan:item.pan,panRole:item.panRole,qty,weight:wt,fromStore:storeId,date:todayStr(),notes,status:'pending'});
-    if(remaining<=0)inv.splice(idx,1);else inv[idx]={...item,qty:remaining};
-    showN(qty+' pan'+(qty!==1?'s':'')+' return request sent to lab');
-  }
-  setS({modal:null,modalCtx:null});
+function rStorePending(store,canEdit){
+  const pending=(DB.pendingDispatch||[]).filter(d=>d.toStore===store.id);
+  if(pending.length===0)return `<div class="card"><div class="ct">Incoming dispatches</div><div class="al as">No pending dispatches for ${store.name}</div></div>`;
+  return `<div class="card"><div class="ct">Incoming dispatches — accept to add to inventory</div>
+    ${pending.map(d=>`<div class="drow" style="margin-bottom:8px">
+      <div class="fbc mb"><span style="font-weight:700;font-size:13px">${d.flavour}</span>
+        <div style="text-align:right">
+          <span style="font-family:var(--ff);font-size:1rem;color:var(--tld)">${d.qty||1}<span style="font-size:.75rem"> pan${(d.qty||1)!==1?'s':''}</span></span>
+          ${d.weight?`<span style="font-family:var(--ff);font-size:.85rem;color:var(--tx3)"> · ${d.weight.toFixed(1)}kg</span>`:''}
+        </div></div>
+      <div class="fbc mb" style="gap:5px">
+        <span class="${pC(d.pan)}">${pL(d.pan)}</span>
+        <span class="tm" style="font-size:11px">From lab · ${fd(d.date)} · by ${d.loggedBy||'Lab'}</span>
+      </div>
+      ${d.notes?`<div class="tm" style="font-size:11px;margin-bottom:6px">&#128196; ${d.notes}</div>`:''}
+      ${canEdit?`<div style="display:flex;gap:6px">
+        <button class="bt" onclick="acceptDispatch(${d.id},'${store.id}')">&#10003; Accept</button>
+        <button class="bd2c" onclick="rejectDispatch(${d.id})">Reject</button>
+      </div>`:''}
+    </div>`).join('')}
+  </div>`;
 }
 
 function acceptDispatch(dispId,storeId){
-  const d=DB.pendingDispatch.find(p=>p.id===dispId);
+  const d=(DB.pendingDispatch||[]).find(p=>p.id===dispId);
   if(!d)return;
-  // Map lab panRole to store panRole: 'store'→'backup', 'event'→'event', others→'backup'
   const storePanRole=d.panRole==='event'?'event':'backup';
   if(!DB.storeGelato[storeId])DB.storeGelato[storeId]=[];
   DB.storeGelato[storeId].push({id:Date.now(),flavour:d.flavour,mfgDate:d.mfgDate||todayStr(),pan:d.pan,panRole:storePanRole,qty:d.qty||1,weight:d.weight||0});
   if(!DB.storeReceived[storeId])DB.storeReceived[storeId]=[];
-  DB.storeReceived[storeId].push({id:Date.now()+1,flavour:d.flavour,pan:d.pan,panRole:storePanRole,qty:d.qty||1,weight:d.weight,mfgDate:d.mfgDate||todayStr(),date:todayStr(),notes:d.notes});
-  // Mark dispatch as accepted
+  DB.storeReceived[storeId].push({id:Date.now()+1,flavour:d.flavour,pan:d.pan,panRole:storePanRole,qty:d.qty||1,weight:d.weight,mfgDate:d.mfgDate||todayStr(),date:todayStr(),notes:d.notes||''});
   const disp=DB.dispatches.find(dp=>dp.id===dispId);if(disp)disp.status='accepted';
   DB.pendingDispatch.splice(DB.pendingDispatch.findIndex(p=>p.id===dispId),1);
   showN('Dispatch accepted — added to '+sN(storeId)+' inventory');re();
 }
 
 function rejectDispatch(dispId){
-  const idx=DB.pendingDispatch.findIndex(p=>p.id===dispId);
+  const idx=(DB.pendingDispatch||[]).findIndex(p=>p.id===dispId);
   if(idx>=0)DB.pendingDispatch.splice(idx,1);
   const disp=DB.dispatches.find(dp=>dp.id===dispId);if(disp)disp.status='rejected';
   showN('Dispatch rejected');re();
-}
-
-function acceptReturn(retId){
-  const r=DB.returnToLab.find(r=>r.id===retId);
-  if(!r)return;
-  r.status='accepted';
-  DB.labReturns.push({...r});
-  showN('Return accepted — added to rechurn queue');re();
-}
-
-function rejectReturn(retId){
-  const r=DB.returnToLab.find(r=>r.id===retId);
-  if(r){r.status='rejected';}
-  showN('Return rejected');re();
-}
-
-function markRechurned(idx){
-  DB.labReturns.splice(idx,1);
-  showN('Marked as rechurned — removed from queue');re();
 }
 
 function showN(msg){S.notif=msg;re();setTimeout(()=>{S.notif=null;re();},3000);}
