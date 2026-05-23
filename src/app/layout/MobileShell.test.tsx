@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderApp, screen, userEvent } from "../../test/render";
 import { App } from "../App";
 import { MobileShell, type ShellUser } from "./MobileShell";
+import { resetDemoStaffData } from "../../features/admin/staff/staffApi";
+import { resetDemoAttendanceData } from "../../features/attendance/attendanceApi";
 
 const adminUser: ShellUser = {
   name: "Admin",
@@ -10,6 +12,11 @@ const adminUser: ShellUser = {
 };
 
 describe("MobileShell", () => {
+  beforeEach(() => {
+    resetDemoStaffData();
+    resetDemoAttendanceData();
+  });
+
   it("renders the mobile header and role navigation", () => {
     Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: 390 });
 
@@ -55,7 +62,7 @@ describe("MobileShell", () => {
     renderApp(<App />);
 
     expect(screen.getByRole("heading", { name: "Snowy Owl" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Store Staff Rajpur Road" }));
+    await user.click(screen.getByRole("button", { name: "Store Staff Malsi" }));
 
     expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();

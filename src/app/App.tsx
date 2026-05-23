@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ClipboardCheck, PackageSearch } from "lucide-react";
-import { APP_ROLES, type AppRole, ROLE_LABELS } from "../domain/roles";
+import { PackageSearch } from "lucide-react";
+import { type AppRole, ROLE_LABELS } from "../domain/roles";
 import {
   canAccessRoute,
   getDefaultRouteForRole,
@@ -10,24 +10,35 @@ import {
   type RouteId,
 } from "./routes";
 import { MobileShell, type ShellUser } from "./layout/MobileShell";
+import { AuthProvider, useAuth } from "../features/auth/AuthProvider";
+import { LoginPage } from "../features/auth/LoginPage";
+import { RequireRole } from "../features/auth/RequireRole";
+import { AttendancePage } from "../features/attendance/AttendancePage";
+import { StaffPage } from "../features/admin/staff/StaffPage";
 
 interface AppProps {
   initialRole?: AppRole | null;
 }
 
-const previewLocations: Record<AppRole, string> = {
-  admin: "All locations",
-  store_manager: "All stores",
-  lab_manager: "Lab",
-  store_staff: "Rajpur Road",
-  lab_staff: "Lab",
+const locationLabels: Record<string, string> = {
+  lab: "Lab",
+  rajpur: "Rajpur Road",
+  malsi: "Malsi",
+  mussoorie: "Mussoorie",
 };
 
 export function App({ initialRole = null }: AppProps) {
-  const [role, setRole] = useState<AppRole | null>(initialRole);
-  const [activeRoute, setActiveRoute] = useState<RouteId>(() =>
-    getDefaultRouteForRole(initialRole ?? "admin"),
+  return (
+    <AuthProvider initialRole={initialRole}>
+      <AuthenticatedApp />
+    </AuthProvider>
   );
+}
+
+function AuthenticatedApp() {
+  const { profile, signOut } = useAuth();
+  const role = profile?.role;
+  const [activeRoute, setActiveRoute] = useState<RouteId>(() => getDefaultRouteForRole(role ?? "admin"));
 
   useEffect(() => {
     if (role && !canAccessRoute(role, activeRoute)) {
@@ -37,25 +48,20 @@ export function App({ initialRole = null }: AppProps) {
 
   const user: ShellUser | null = useMemo(
     () =>
-      role
+      profile
         ? {
-            name: ROLE_LABELS[role],
-            role,
-            locationLabel: previewLocations[role],
+            name: profile.name,
+            role: profile.role,
+            locationLabel: profile.defaultLocationId
+              ? locationLabels[profile.defaultLocationId] ?? profile.defaultLocationId
+              : "All locations",
           }
         : null,
-    [role],
+    [profile],
   );
 
   if (!user) {
-    return (
-      <PersonaEntry
-        onSelectRole={(nextRole) => {
-          setRole(nextRole);
-          setActiveRoute(getDefaultRouteForRole(nextRole));
-        }}
-      />
-    );
+    return <LoginPage />;
   }
 
   return (
@@ -64,7 +70,7 @@ export function App({ initialRole = null }: AppProps) {
       activeRoute={activeRoute}
       onNavigate={setActiveRoute}
       onLogout={() => {
-        setRole(null);
+        void signOut();
         setActiveRoute("dashboard");
       }}
     >
@@ -73,42 +79,18 @@ export function App({ initialRole = null }: AppProps) {
   );
 }
 
-function PersonaEntry({ onSelectRole }: { onSelectRole: (role: AppRole) => void }) {
-  return (
-    <main className="login-screen">
-      <section className="login-panel" aria-labelledby="login-title">
-        <div className="login-brand">
-          <div className="login-mark">SO</div>
-          <h1 id="login-title">Snowy Owl</h1>
-          <p>Operations</p>
-        </div>
-
-        <div className="card">
-          <div className="card-title">Open workspace</div>
-          <div className="persona-list">
-            {APP_ROLES.map((entryRole) => (
-              <button
-                className="persona-button"
-                type="button"
-                key={entryRole}
-                onClick={() => onSelectRole(entryRole)}
-              >
-                <ClipboardCheck size={16} aria-hidden="true" />
-                <span>{ROLE_LABELS[entryRole]}</span>
-                <small>{previewLocations[entryRole]}</small>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 function RoutePanel({ role, routeId }: { role: AppRole; routeId: RouteId }) {
   const route = getRoute(routeId);
   const cards = getRouteCards(routeId, role);
   const Icon = route.icon;
+  const customContent =
+    routeId === "attendance" ? (
+      <AttendancePage />
+    ) : routeId === "staff" ? (
+      <RequireRole allow={["admin"]}>
+        <StaffPage />
+      </RequireRole>
+    ) : null;
 
   return (
     <section className="page-panel" aria-labelledby="page-title">
@@ -127,14 +109,16 @@ function RoutePanel({ role, routeId }: { role: AppRole; routeId: RouteId }) {
         <strong>{route.label}</strong>
       </div>
 
-      <div className="work-grid" aria-label={`${route.label} sections`}>
-        {cards.map((card) => (
-          <button className="work-card" type="button" key={card}>
-            <PackageSearch size={19} aria-hidden="true" />
-            <span>{card}</span>
-          </button>
-        ))}
-      </div>
+      {customContent ?? (
+        <div className="work-grid" aria-label={`${route.label} sections`}>
+          {cards.map((card) => (
+            <button className="work-card" type="button" key={card}>
+              <PackageSearch size={19} aria-hidden="true" />
+              <span>{card}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

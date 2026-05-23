@@ -8,6 +8,29 @@ export const APP_ROLES = [
 
 export type AppRole = (typeof APP_ROLES)[number];
 
+export type SalaryType = "monthly" | "daily";
+
+export interface LocationOption {
+  id: string;
+  name: string;
+  type: "lab" | "store";
+  active: boolean;
+}
+
+export interface StaffProfile {
+  id: string;
+  authUserId?: string | null;
+  name: string;
+  phone: string;
+  role: AppRole;
+  defaultLocationId: string | null;
+  salaryAmount: number | null;
+  salaryType: SalaryType | null;
+  allowedHolidaysPerMonth: number;
+  bonusDaysBalance: number;
+  active: boolean;
+}
+
 export const ROLE_LABELS: Record<AppRole, string> = {
   admin: "Admin",
   store_manager: "Store Manager",
@@ -22,4 +45,8 @@ export function isStoreRole(role: AppRole): boolean {
 
 export function isLabRole(role: AppRole): boolean {
   return role === "lab_manager" || role === "lab_staff";
+}
+
+export function canManageStaff(role: AppRole): boolean {
+  return role === "admin";
 }
