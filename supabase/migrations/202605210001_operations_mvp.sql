@@ -405,7 +405,7 @@ returns uuid
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select u.id
   from public.users u
@@ -419,7 +419,7 @@ returns public.app_role
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select u.role
   from public.users u
@@ -433,7 +433,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select coalesce(public.current_app_role() = any(required_roles), false)
 $$;
@@ -443,7 +443,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select public.current_app_role() = 'admin'::public.app_role
 $$;
