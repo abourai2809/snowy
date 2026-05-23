@@ -1,0 +1,33 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { App } from "../../app/App";
+import { resetDemoStaffData } from "../admin/staff/staffApi";
+import { resetDemoAttendanceData } from "../attendance/attendanceApi";
+import { resetDemoCatalogData } from "../catalog/catalogApi";
+import { resetDemoInventoryData } from "./inventoryApi";
+import { renderApp, screen, userEvent, within } from "../../test/render";
+
+describe("InventoryCountPage", () => {
+  beforeEach(() => {
+    resetDemoCatalogData();
+    resetDemoInventoryData();
+    resetDemoStaffData();
+    resetDemoAttendanceData();
+  });
+
+  it("lets store staff submit catalog-driven supply counts without adding new items", async () => {
+    const user = userEvent.setup();
+    renderApp(<App initialRole="store_staff" />);
+
+    await user.click(screen.getByRole("button", { name: "Store" }));
+    const form = await screen.findByRole("form", { name: "Store supply checklist form" });
+
+    await user.type(within(form).getByLabelText("Single Use Cups quantity"), "210");
+    await user.type(within(form).getByLabelText("Napkins quantity"), "480");
+    await user.type(within(form).getByLabelText("Waffle Cones quantity"), "90");
+    await user.type(within(form).getByLabelText("Waffle Mix quantity"), "4");
+    await user.click(within(form).getByRole("button", { name: "Submit count" }));
+
+    expect(await screen.findByText("Inventory count submitted.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add item" })).not.toBeInTheDocument();
+  });
+});

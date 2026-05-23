@@ -241,7 +241,7 @@ async function listEodItems(countId: string): Promise<EodCountItem[]> {
 
 async function replaceEodItems(countId: string, items: EodCountInput["items"]): Promise<EodCountItem[]> {
   if (!isSupabaseConfigured) {
-    demoEodCountItems = demoEodCountItems.filter((item) => item.countId !== countId);
+    demoEodCountItems = demoEodCountItems.filter((item) => item.countId !== countId || item.panId === null);
     const created = items.map((item): EodCountItem => ({
       id: makeId("eod-item"),
       countId,
@@ -257,7 +257,11 @@ async function replaceEodItems(countId: string, items: EodCountInput["items"]): 
   }
 
   const supabase = requireSupabaseClient();
-  const { error: deleteError } = await supabase.from("end_of_day_count_items").delete().eq("count_id", countId);
+  const { error: deleteError } = await supabase
+    .from("end_of_day_count_items")
+    .delete()
+    .eq("count_id", countId)
+    .not("pan_uuid", "is", null);
   if (deleteError) throw deleteError;
 
   if (items.length === 0) {

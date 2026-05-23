@@ -3,7 +3,7 @@ import type { Flavour } from "../../domain/flavours";
 import type { Pan } from "../../domain/pans";
 import { useAuth } from "../auth/AuthProvider";
 import { listFlavours } from "../catalog/catalogApi";
-import { StoreCatalogPreview } from "../catalog/CatalogReaders";
+import { InventoryCountPage } from "../inventory/InventoryCountPage";
 import { IncomingDispatches } from "./IncomingDispatches";
 import { DisplayMovementForm } from "./DisplayMovementForm";
 import { EodGelatoCount } from "./EodGelatoCount";
@@ -94,7 +94,7 @@ export function StoreDashboard() {
         <PanRows pans={displayPans} flavours={flavours} />
       </section>
       <EodGelatoCount {...actor} locationId={locationId} displayPans={displayPans} flavours={flavours} onChanged={() => void load()} />
-      <StoreCatalogPreview />
+      <InventoryCountPage title="Store supply checklist" scope="store" />
     </div>
   );
 }

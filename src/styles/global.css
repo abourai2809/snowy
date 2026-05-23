@@ -693,6 +693,38 @@ button {
   font-weight: 700;
 }
 
+.inventory-count-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--cr);
+}
+
+.inventory-count-row span {
+  display: grid;
+  gap: 3px;
+}
+
+.inventory-count-row small {
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.inventory-count-row input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  padding: 0 10px;
+}
+
 @media (min-width: 700px) {
   .app-shell {
     margin-top: 24px;
