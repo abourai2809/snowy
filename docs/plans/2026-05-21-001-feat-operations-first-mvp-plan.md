@@ -31,8 +31,9 @@ The manuals remain the source of truth for persona workflows. The current `index
 - Admin can edit all master data from day one: flavours, products, categories, raw materials, lab supplies, store supplies, packaging, stores, users, staff settings, and holiday allowances.
 - Staff cannot create catalog items.
 - Catalog items can be scoped to `lab`, `store`, or `both`; actual inventory is still tracked separately per location.
-- Lab can record gelato production by batch/pan, assign pan IDs, track raw materials and lab supplies, and dispatch pans to stores.
-- Store staff can accept incoming dispatches, record pan movement from backup to display, and submit end-of-day display freezer weights.
+- Lab can record gelato production by batch/pan, assign pan IDs, and add those pans into lab inventory.
+- Lab dispatch is a separate workflow from production: staff select available lab inventory to move to stores based on store requirements, and the app adjusts remaining lab inventory automatically.
+- Store staff can accept incoming dispatches, record pan movement from backup to display, and submit end-of-day display freezer weights through a clear EOD gelato weight entry action.
 - When a pan is moved to display, staff must answer full or partial; partial requires weight.
 - Store supply counts are checklist-driven from the Admin catalog.
 - Attendance is MVP: staff check in/out daily; Admin can add/subtract staff, add bonus days, and control allowed holidays.
@@ -309,15 +310,18 @@ Work:
 - Lab records production by flavour, quantity, batch date, and pan count.
 - Generate simple pan IDs from flavour short code, numeric date, and sequence.
 - Record batch ID separately from pan ID.
-- Create pan records with initial role/location.
-- Dispatch selected pans to a store.
+- Create pan records with initial role/location in lab inventory.
+- Dispatch selected available lab inventory pans to a store in a separate action from production.
+- Dispatch automatically removes those pans from available lab inventory or marks them in transit so remaining lab stock is clear.
 - Track raw material and lab supply usage at a basic inventory level.
 
 Tests:
 
 - Producing three pans for one flavour creates three unique pan IDs.
 - Pan IDs include flavour code, date, and sequence.
+- Producing pans adds them to lab inventory without requiring immediate dispatch.
 - Dispatching pans changes their status to in transit.
+- Dispatching two of three produced pans leaves one available pan in lab inventory.
 - Lab cannot dispatch a pan that is already dispatched or closed.
 
 Dependencies:
@@ -348,7 +352,8 @@ Work:
 - Staff can move a backup pan to display.
 - Display movement requires pan ID and full/partial choice.
 - Partial display movement requires weight.
-- End-of-day count records weights for display pans.
+- End-of-day count has a clearly findable EOD gelato weight entry action.
+- End-of-day count supports choosing display flavours/pans and entering weights, while preserving pan IDs where known.
 - Store Manager can correct same-day store submissions.
 - Admin can correct historical store inventory records.
 
@@ -356,7 +361,7 @@ Tests:
 
 - Store receives dispatched pan and it appears in backup inventory.
 - Display movement blocks submit if partial is selected without weight.
-- End-of-day count records only display freezer pans.
+- End-of-day count records only display freezer pans, with a clear flavour/pan weight entry UI for staff.
 - Store Manager can correct same-day count.
 - Store Staff cannot correct another store's records.
 - E2E mobile flow: Lab creates pan -> dispatches -> Store receives -> moves partial pan to display -> submits EOD count.
@@ -434,6 +439,45 @@ Dependencies:
 
 - Units 1 through 7.
 
+### Unit 9: Lab Inventory Dispatch Split And EOD Gelato Entry Update
+
+Goal: Refine the current implementation so lab production, lab inventory, and store dispatch are operationally distinct, and Store Staff can find and submit EOD gelato weights by choosing flavours/pans.
+
+Files:
+
+- `src/features/lab/LabDashboard.tsx`
+- `src/features/lab/ProductionForm.tsx`
+- `src/features/lab/PanList.tsx`
+- `src/features/lab/DispatchForm.tsx`
+- `src/features/lab/labApi.ts`
+- `src/features/store/EodGelatoCount.tsx`
+- `src/features/store/StoreDashboard.tsx`
+- `src/features/store/storeApi.ts`
+- `src/domain/pans.ts`
+- `src/domain/inventory.ts`
+- Related tests under `src/features/lab/` and `src/features/store/`
+
+Work:
+
+- Split the Lab page into two clearly labeled sections: `Add Lab Production` and `Move Inventory To Store`.
+- Production only creates lab inventory. It must not imply immediate dispatch.
+- Dispatch only works from available lab inventory and updates remaining available lab inventory automatically.
+- Store EOD gelato weight entry must be visible as a distinct action/menu on the Store Staff page.
+- EOD weight entry should let staff choose display flavours and enter weights. If pan IDs are available, keep the weight attached to the pan ID; if the workflow needs a flavour-level fallback, store the flavour and weight without blocking staff.
+- Keep supply EOD counting separate from gelato EOD weight entry.
+
+Tests:
+
+- Producing three pans shows three available lab inventory records and no store incoming dispatch.
+- Dispatching two of those pans creates a store incoming dispatch and leaves one available lab inventory pan.
+- Store Staff can find `EOD gelato weight` without first reading through backup/display sections.
+- Store Staff can choose a flavour/display pan and submit an EOD weight.
+- Store EOD supply checklist remains separate from gelato weights.
+
+Dependencies:
+
+- Units 5 and 6 current implementation.
+
 ## Dependency Graph
 
 ```mermaid
@@ -448,6 +492,8 @@ flowchart LR
   U6 --> U8["Unit 8: Reports and hardening"]
   U7 --> U8
   U3 --> U8
+  U5 --> U9["Unit 9: Lab inventory dispatch split"]
+  U6 --> U9
 ```
 
 ## Implementation Notes
@@ -485,6 +531,7 @@ Run, at minimum:
 - Database schema/RLS tests.
 - Unit tests for catalog, attendance, lab production, dispatch, receiving, display movement, EOD counts, and supply checklists.
 - Playwright mobile tests for the core Lab -> Store -> EOD workflow.
+- Follow-up tests for lab inventory remaining after partial dispatch and flavour/pan EOD gelato weight entry.
 - Playwright mobile tests for Admin catalog and attendance workflows.
 - Manual smoke test on a phone-sized viewport before declaring MVP complete.
 

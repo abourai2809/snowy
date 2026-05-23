@@ -45,9 +45,9 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - F2. Lab produces and dispatches gelato
   - **Trigger:** Lab produces one or more pans for stores or events.
   - **Actors:** A2, A3, A6
-  - **Steps:** Lab selects a catalog flavour, records production details, assigns one pan ID per physical pan, and dispatches selected pans to a store.
-  - **Outcome:** Lab inventory decreases or changes state as dispatches are created, and destination stores see incoming stock for acceptance.
-  - **Covered by:** R6, R7, R8, R9
+  - **Steps:** Lab selects a catalog flavour, records production details, assigns one pan ID per physical pan, and adds those pans into lab inventory. Separately, lab selects available lab inventory and dispatches it to a store based on store requirements.
+  - **Outcome:** Production increases lab inventory first. Dispatch later decreases available lab inventory or changes those pans to in-transit, and destination stores see incoming stock for acceptance.
+  - **Covered by:** R6, R7, R8, R9, R22
 
 - F3. Store receives and moves gelato
   - **Trigger:** A store receives a dispatch or moves a pan from backup storage to display.
@@ -59,9 +59,9 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - F4. Store submits end-of-day inventory
   - **Trigger:** Store closes for the day.
   - **Actors:** A4, A5, A6
-  - **Steps:** Staff weigh only display gelato pans and complete the generated supply checklist for that store. Store manager can correct same-day submissions.
+  - **Steps:** Staff open a clear end-of-day gelato weight workflow, choose the display flavours/pans being counted, enter weights, and complete the generated supply checklist for that store. Store manager can correct same-day submissions.
   - **Outcome:** Closing inventory records exist for gelato display stock and store supplies without requiring a full deep-freezer count.
-  - **Covered by:** R11, R12, R13, R14
+  - **Covered by:** R11, R12, R13, R14, R23
 
 - F5. Staff attendance is recorded
   - **Trigger:** Staff arrive for or leave a shift.
@@ -89,6 +89,8 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - R10. Moving a pan to display must be driven by pan ID and require staff to mark whether the pan is Full or Partial; if Partial, weight is mandatory.
 - R11. End-of-day gelato inventory must require weighing only pans currently in display, not counting every deep-freezer backup pan.
 - R12. Store managers must be able to correct same-day store inventory submissions, and Admin must be able to correct historical inventory records without mandatory reason notes in MVP.
+- R22. Lab production and lab dispatch must be separate workflows: production adds pans to lab inventory, while dispatch moves selected available lab inventory to a store and automatically reduces the remaining available lab inventory.
+- R23. Store end-of-day gelato weights must be easy to find as a distinct action. The workflow should support choosing display flavours and entering weights, while preserving pan-level traceability where pan IDs are available.
 
 **Supplies and other inventory**
 - R13. Lab raw materials, lab supplies, store supplies, packaging, serving supplies, and other operationally counted items must be managed as inventory by location.
@@ -112,9 +114,9 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - AE1. **Covers R1, R2, R5.** Given Admin adds a new flavour in Catalog, when Lab Staff opens production entry, the new flavour is available without editing code.
 - AE2. **Covers R3, R13, R14.** Given Admin marks an item as Store inventory, when Store Staff opens end-of-day supplies, that item appears in the store checklist while lab quantities remain separate.
 - AE3. **Covers R4.** Given Store Staff is counting supplies and notices a missing item, when they use the app, they cannot create a new catalog item and must ask Admin to add it.
-- AE4. **Covers R6, R7, R8, R9.** Given Lab creates three pans of a flavour and dispatches two to Rajpur, when Rajpur accepts the dispatch, those two pan IDs become Rajpur backup or event inventory according to `panRole`.
+- AE4. **Covers R6, R7, R8, R9, R22.** Given Lab creates three pans of a flavour, when production is saved, all three pans appear in lab inventory. When Lab later dispatches two to Rajpur, lab available inventory shows one remaining pan and Rajpur sees two incoming pan IDs.
 - AE5. **Covers R10.** Given Store Staff enters a pan ID to move it to display, when they choose Partial, the app requires weight before saving the movement.
-- AE6. **Covers R11, R14.** Given it is end of day, when Store Staff submits closing inventory, they weigh display pans and complete the supply checklist without being asked to count every backup freezer pan.
+- AE6. **Covers R11, R14, R23.** Given it is end of day, when Store Staff opens EOD gelato weight entry, they can choose display flavours/pans and enter weights, then complete the supply checklist without being asked to count every backup freezer pan.
 - AE7. **Covers R12.** Given a store staff member submitted an incorrect same-day count, when Store Manager corrects it, the corrected value becomes the official MVP value without a mandatory reason note.
 - AE8. **Covers R16, R17, R18, R19.** Given Admin configured staff and allowed holidays, when staff check in/out through the app, Admin can review attendance and apply bonus days where needed.
 
@@ -126,6 +128,7 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - Admin can maintain all master data needed for MVP workflows without developer intervention.
 - Lab-to-store gelato movement is traceable by pan ID from production through store acceptance and display movement.
 - End-of-day store counts capture display gelato weights and supply counts with minimal staff friction.
+- Lab production and dispatch are operationally separate: adding production does not imply dispatch, and dispatch consumes available lab inventory.
 - Attendance and roster management are usable enough for daily staff tracking and payroll review.
 - A planner can move from this document to `ce-plan` without inventing persona permissions, MVP scope, or deferred POS behavior.
 
