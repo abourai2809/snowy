@@ -1,0 +1,41 @@
+import { describe, expect, it } from "vitest";
+import { canAccessRoute, getDefaultRouteForRole, getRoutesForRole } from "./routes";
+
+describe("role routes", () => {
+  it("lets Admin reach operational and admin setup routes", () => {
+    expect(getRoutesForRole("admin").map((route) => route.id)).toEqual([
+      "dashboard",
+      "attendance",
+      "lab",
+      "stores",
+      "catalog",
+      "staff",
+    ]);
+  });
+
+  it("keeps store staff on store-facing routes", () => {
+    expect(getRoutesForRole("store_staff").map((route) => route.id)).toEqual([
+      "dashboard",
+      "attendance",
+      "store",
+    ]);
+    expect(canAccessRoute("store_staff", "catalog")).toBe(false);
+    expect(canAccessRoute("store_staff", "lab")).toBe(false);
+  });
+
+  it("keeps lab staff on lab-facing routes", () => {
+    expect(getRoutesForRole("lab_staff").map((route) => route.id)).toEqual([
+      "dashboard",
+      "attendance",
+      "lab",
+    ]);
+    expect(canAccessRoute("lab_staff", "store")).toBe(false);
+    expect(canAccessRoute("lab_staff", "staff")).toBe(false);
+  });
+
+  it("starts each role on the dashboard", () => {
+    expect(getDefaultRouteForRole("admin")).toBe("dashboard");
+    expect(getDefaultRouteForRole("store_manager")).toBe("dashboard");
+    expect(getDefaultRouteForRole("lab_manager")).toBe("dashboard");
+  });
+});
