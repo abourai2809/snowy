@@ -5,6 +5,13 @@ import { getEodCount, submitEodGelatoCount } from "./storeApi";
 import type { Flavour } from "../../domain/flavours";
 import type { Pan } from "../../domain/pans";
 
+interface EodEntry {
+  id: string;
+  panUuid: string | null;
+  flavourId: string | null;
+  weightKg: string;
+}
+
 interface EodGelatoCountProps extends StoreActor {
   locationId: string;
   displayPans: Pan[];
@@ -25,19 +32,23 @@ export function EodGelatoCount({
   locationId,
   onChanged,
 }: EodGelatoCountProps) {
-  const [weights, setWeights] = useState<Record<string, string>>({});
+  const [entries, setEntries] = useState<EodEntry[]>([]);
   const [count, setCount] = useState<EodCountWithItems | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const businessDate = todayDate();
   const flavourById = new Map(flavours.map((flavour) => [flavour.id, flavour]));
   const staffCorrectionLocked = count && actorRole === "store_staff";
+  const displayFlavourIds = [...new Set(displayPans.map((pan) => pan.flavourId))];
 
   useEffect(() => {
-    setWeights(
-      Object.fromEntries(
-        displayPans.map((pan) => [pan.id, pan.currentWeightKg === null ? "" : String(pan.currentWeightKg)]),
-      ),
+    setEntries(
+      displayPans.map((pan) => ({
+        id: pan.id,
+        panUuid: pan.id,
+        flavourId: pan.flavourId,
+        weightKg: pan.currentWeightKg === null ? "" : String(pan.currentWeightKg),
+      })),
     );
   }, [displayPans]);
 
@@ -69,9 +80,10 @@ export function EodGelatoCount({
         actorId,
         actorRole,
         actorLocationId,
-        items: displayPans.map((pan) => ({
-          panUuid: pan.id,
-          weightKg: Number(weights[pan.id]),
+        items: entries.map((entry) => ({
+          panUuid: entry.panUuid,
+          flavourId: entry.flavourId,
+          weightKg: Number(entry.weightKg),
         })),
       });
       setCount(submitted);
@@ -82,9 +94,43 @@ export function EodGelatoCount({
     }
   }
 
+  function addEntry() {
+    setEntries((current) => [
+      ...current,
+      {
+        id: `manual-${Date.now()}`,
+        panUuid: null,
+        flavourId: displayFlavourIds[0] ?? null,
+        weightKg: "",
+      },
+    ]);
+  }
+
+  function removeEntry(entryId: string) {
+    setEntries((current) => current.filter((entry) => entry.id !== entryId));
+  }
+
+  function updateEntryChoice(entryId: string, value: string) {
+    setEntries((current) =>
+      current.map((entry) => {
+        if (entry.id !== entryId) return entry;
+        if (value.startsWith("pan:")) {
+          const pan = displayPans.find((item) => item.id === value.slice(4));
+          return { ...entry, panUuid: pan?.id ?? null, flavourId: pan?.flavourId ?? null };
+        }
+
+        return { ...entry, panUuid: null, flavourId: value.slice(8) || null };
+      }),
+    );
+  }
+
+  function updateEntryWeight(entryId: string, weightKg: string) {
+    setEntries((current) => current.map((entry) => (entry.id === entryId ? { ...entry, weightKg } : entry)));
+  }
+
   return (
-    <section className="card">
-      <div className="card-title">End of day</div>
+    <section className="card" id="eod-gelato-weights">
+      <div className="card-title">EOD gelato weights</div>
       {error ? <div className="alert alert-danger">{error}</div> : null}
       {message ? <div className="alert alert-success">{message}</div> : null}
       {count ? (
@@ -92,29 +138,59 @@ export function EodGelatoCount({
           Today: <strong>{count.status}</strong>
         </p>
       ) : null}
-      {displayPans.length === 0 ? <p className="muted-copy">No display pans to count.</p> : null}
-      <form aria-label="EOD gelato count form" onSubmit={submit}>
+      {displayPans.length === 0 ? <p className="muted-copy">No display flavours or pans to count. Move a pan to display first.</p> : null}
+      <form aria-label="EOD gelato weight form" onSubmit={submit}>
         <div className="list-stack">
-          {displayPans.map((pan) => (
-            <label className="field compact-field" key={pan.id}>
-              <span>
-                {pan.panId} {flavourById.get(pan.flavourId)?.name ?? ""}
-              </span>
-              <input
-                aria-label={`EOD weight ${pan.panId}`}
-                type="number"
-                min="0"
-                step="0.01"
-                value={weights[pan.id] ?? ""}
-                onChange={(event) => setWeights((current) => ({ ...current, [pan.id]: event.target.value }))}
-                required
-              />
-            </label>
+          {entries.map((entry) => (
+            <div className="eod-weight-row" key={entry.id}>
+              <label className="field compact-field">
+                <span>Flavour or pan</span>
+                <select
+                  aria-label={`EOD gelato item ${entry.id}`}
+                  value={entry.panUuid ? `pan:${entry.panUuid}` : `flavour:${entry.flavourId ?? ""}`}
+                  onChange={(event) => updateEntryChoice(entry.id, event.target.value)}
+                  required
+                >
+                  {displayPans.map((pan) => (
+                    <option value={`pan:${pan.id}`} key={pan.id}>
+                      {pan.panId} - {flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"}
+                    </option>
+                  ))}
+                  {displayFlavourIds.map((flavourId) => (
+                    <option value={`flavour:${flavourId}`} key={flavourId}>
+                      {flavourById.get(flavourId)?.name ?? "Unknown flavour"} total
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field compact-field">
+                <span>Weight kg</span>
+                <input
+                  aria-label={`EOD weight ${entry.panUuid ? displayPans.find((pan) => pan.id === entry.panUuid)?.panId : flavourById.get(entry.flavourId ?? "")?.name ?? "flavour"}`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={entry.weightKg}
+                  onChange={(event) => updateEntryWeight(entry.id, event.target.value)}
+                  required
+                />
+              </label>
+              {entries.length > 1 ? (
+                <button className="danger-button" type="button" onClick={() => removeEntry(entry.id)}>
+                  Remove
+                </button>
+              ) : null}
+            </div>
           ))}
         </div>
-        <button className="primary-button" type="submit" disabled={displayPans.length === 0 || Boolean(staffCorrectionLocked)}>
-          {count ? "Update count" : "Submit count"}
-        </button>
+        <div className="action-row">
+          <button className="secondary-button" type="button" onClick={addEntry} disabled={displayFlavourIds.length === 0}>
+            Add gelato line
+          </button>
+          <button className="primary-button" type="submit" disabled={entries.length === 0 || Boolean(staffCorrectionLocked)}>
+            {count ? "Update count" : "Submit count"}
+          </button>
+        </div>
       </form>
       {staffCorrectionLocked ? <p className="muted-copy">Ask a Store Manager to correct today&apos;s count.</p> : null}
     </section>

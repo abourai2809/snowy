@@ -41,8 +41,8 @@ export function LabDashboard() {
   return (
     <div className="page-stack">
       <ProductionForm flavours={flavours} profile={profile} onCreated={refresh} />
-      <DispatchForm pans={availablePans} flavours={flavours} profile={profile} onDispatched={refresh} />
       <PanList pans={pans} flavours={flavours} />
+      <DispatchForm pans={availablePans} flavours={flavours} profile={profile} onDispatched={refresh} />
       <InventoryCountPage title="Lab checklist" scope="lab" kinds={["raw_material", "supply", "packaging"]} />
       <section className="card">
         <div className="card-title">Recent dispatches</div>

@@ -38,6 +38,7 @@ export interface EodCountItem {
   id: string;
   countId: string;
   panId: string | null;
+  flavourId: string | null;
   catalogItemId: string | null;
   quantity: number | null;
   weightKg: number | null;

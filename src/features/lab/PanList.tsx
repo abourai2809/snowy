@@ -11,9 +11,9 @@ export function PanList({ pans, flavours }: PanListProps) {
 
   return (
     <section className="card">
-      <div className="card-title">Lab pans</div>
-      {pans.length === 0 ? <p className="muted-copy">No pans recorded yet.</p> : null}
-      <div className="list-stack" aria-label="Lab pan list">
+      <div className="card-title">Lab inventory</div>
+      {pans.length === 0 ? <p className="muted-copy">No lab inventory recorded yet.</p> : null}
+      <div className="list-stack" aria-label="Lab inventory list">
         {pans.map((pan) => (
           <article className="list-row" key={pan.id}>
             <div>

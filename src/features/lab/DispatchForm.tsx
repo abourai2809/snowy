@@ -42,7 +42,7 @@ export function DispatchForm({ pans, flavours, profile, onDispatched }: Dispatch
         dispatchedBy: profile.id,
         notes: notes.trim() || null,
       });
-      setMessage(`Dispatched ${selectedPanIds.length} pan${selectedPanIds.length === 1 ? "" : "s"}.`);
+      setMessage(`Moved ${selectedPanIds.length} pan${selectedPanIds.length === 1 ? "" : "s"} to store.`);
       setSelectedPanIds([]);
       setNotes("");
       setError(null);
@@ -54,8 +54,8 @@ export function DispatchForm({ pans, flavours, profile, onDispatched }: Dispatch
 
   return (
     <section className="card">
-      <div className="card-title">Dispatch</div>
-      <form className="staff-form" aria-label="Dispatch form" onSubmit={handleSubmit}>
+      <div className="card-title">Move inventory to store</div>
+      <form className="staff-form" aria-label="Move inventory to store form" onSubmit={handleSubmit}>
         <label className="field">
           <span>Destination store</span>
           <select value={toLocationId} onChange={(event) => setToLocationId(event.target.value)}>
@@ -65,7 +65,7 @@ export function DispatchForm({ pans, flavours, profile, onDispatched }: Dispatch
           </select>
         </label>
         <div className="checklist" aria-label="Available pans">
-          {pans.length === 0 ? <p className="muted-copy">No available pans to dispatch.</p> : null}
+          {pans.length === 0 ? <p className="muted-copy">No available lab inventory to move.</p> : null}
           {pans.map((pan) => (
             <label className="check-row" key={pan.id}>
               <input
@@ -84,7 +84,7 @@ export function DispatchForm({ pans, flavours, profile, onDispatched }: Dispatch
         </label>
         {message ? <div className="alert alert-success">{message}</div> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
-        <button className="primary-button" type="submit">Dispatch selected pans</button>
+        <button className="primary-button" type="submit">Move selected pans to store</button>
       </form>
     </section>
   );

@@ -40,7 +40,8 @@ export interface EodCountInput extends StoreActor {
   businessDate: string;
   notes: string | null;
   items: Array<{
-    panUuid: string;
+    panUuid?: string | null;
+    flavourId?: string | null;
     weightKg: number;
     notes?: string | null;
   }>;
@@ -106,6 +107,7 @@ function mapEodCountItem(row: Record<string, unknown>): EodCountItem {
     id: String(row.id),
     countId: String(row.count_id),
     panId: row.pan_uuid ? String(row.pan_uuid) : null,
+    flavourId: row.flavour_id ? String(row.flavour_id) : null,
     catalogItemId: row.catalog_item_id ? String(row.catalog_item_id) : null,
     quantity: row.quantity === null || row.quantity === undefined ? null : Number(row.quantity),
     weightKg: row.weight_kg === null || row.weight_kg === undefined ? null : Number(row.weight_kg),
@@ -241,11 +243,12 @@ async function listEodItems(countId: string): Promise<EodCountItem[]> {
 
 async function replaceEodItems(countId: string, items: EodCountInput["items"]): Promise<EodCountItem[]> {
   if (!isSupabaseConfigured) {
-    demoEodCountItems = demoEodCountItems.filter((item) => item.countId !== countId || item.panId === null);
+    demoEodCountItems = demoEodCountItems.filter((item) => item.countId !== countId || item.catalogItemId !== null);
     const created = items.map((item): EodCountItem => ({
       id: makeId("eod-item"),
       countId,
-      panId: item.panUuid,
+      panId: item.panUuid ?? null,
+      flavourId: item.flavourId ?? null,
       catalogItemId: null,
       quantity: null,
       weightKg: item.weightKg,
@@ -261,7 +264,7 @@ async function replaceEodItems(countId: string, items: EodCountInput["items"]): 
     .from("end_of_day_count_items")
     .delete()
     .eq("count_id", countId)
-    .not("pan_uuid", "is", null);
+    .is("catalog_item_id", null);
   if (deleteError) throw deleteError;
 
   if (items.length === 0) {
@@ -273,7 +276,8 @@ async function replaceEodItems(countId: string, items: EodCountInput["items"]): 
     .insert(
       items.map((item) => ({
         count_id: countId,
-        pan_uuid: item.panUuid,
+        pan_uuid: item.panUuid ?? null,
+        flavour_id: item.flavourId ?? null,
         weight_kg: item.weightKg,
         unit: "kg",
         notes: item.notes ?? null,
@@ -368,10 +372,20 @@ export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCou
   assertStoreLocation(input, input.locationId);
 
   const displayPans = await listDisplayPans(input.locationId);
-  const displayPanIds = new Set(displayPans.map((pan) => pan.id));
-  const hasInvalidPan = input.items.some((item) => !displayPanIds.has(item.panUuid));
+  const displayPanById = new Map(displayPans.map((pan) => [pan.id, pan]));
+  const displayFlavourIds = new Set(displayPans.map((pan) => pan.flavourId));
+  const normalizedItems = input.items.map((item) => ({
+    ...item,
+    panUuid: item.panUuid ?? null,
+    flavourId: item.flavourId ?? (item.panUuid ? displayPanById.get(item.panUuid)?.flavourId ?? null : null),
+  }));
+  const hasInvalidPan = normalizedItems.some((item) => item.panUuid && !displayPanById.has(item.panUuid));
   if (hasInvalidPan) {
     throw new Error("End-of-day gelato counts can only include display pans.");
+  }
+  const hasInvalidFlavour = normalizedItems.some((item) => !item.flavourId || !displayFlavourIds.has(item.flavourId));
+  if (hasInvalidFlavour) {
+    throw new Error("End-of-day gelato counts can only include display flavours or pans.");
   }
 
   const existing = await findEodCount(input.locationId, input.businessDate);
@@ -388,13 +402,15 @@ export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCou
       })
     : await createEodCount(input);
 
-  const items = await replaceEodItems(count.id, input.items);
+  const items = await replaceEodItems(count.id, normalizedItems);
   await Promise.all(
-    input.items.map((item) =>
-      updatePanState(item.panUuid, {
-        currentWeightKg: item.weightKg,
-      }),
-    ),
+    normalizedItems
+      .filter((item) => item.panUuid)
+      .map((item) =>
+        updatePanState(item.panUuid!, {
+          currentWeightKg: item.weightKg,
+        }),
+      ),
   );
 
   return { ...count, items };
@@ -473,7 +489,9 @@ export async function listEodGelatoCounts(): Promise<EodCountWithItems[]> {
   if (!isSupabaseConfigured) {
     return demoEodCounts.map((count) => ({
       ...count,
-      items: demoEodCountItems.filter((item) => item.countId === count.id && item.panId !== null),
+      items: demoEodCountItems.filter(
+        (item) => item.countId === count.id && (item.panId !== null || item.flavourId !== null),
+      ),
     }));
   }
 
@@ -489,7 +507,7 @@ export async function listEodGelatoCounts(): Promise<EodCountWithItems[]> {
       const count = mapEodCount(row);
       return {
         ...count,
-        items: (await listEodItems(count.id)).filter((item) => item.panId !== null),
+        items: (await listEodItems(count.id)).filter((item) => item.panId !== null || item.flavourId !== null),
       };
     }),
   );

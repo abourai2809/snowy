@@ -53,7 +53,7 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
 
   return (
     <section className="card">
-      <div className="card-title">Production</div>
+      <div className="card-title">Add lab production</div>
       <form className="staff-form" aria-label="Production form" onSubmit={handleSubmit}>
         <label className="field">
           <span>Production flavour</span>

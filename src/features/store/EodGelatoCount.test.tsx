@@ -62,6 +62,36 @@ describe("store EOD gelato counts", () => {
     expect(count.items[0].panId).toBe(displayPanUuid);
   });
 
+  it("records display flavour weights when a pan ID is unavailable", async () => {
+    const [displayPanUuid] = await seedStorePans(1);
+    const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PSP");
+    expect(flavour).toBeDefined();
+    await movePanToDisplay({
+      panUuid: displayPanUuid,
+      storeLocationId: "malsi",
+      fillState: "partial",
+      weightKg: 1.2,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    const count = await submitEodGelatoCount({
+      locationId: "malsi",
+      businessDate: todayDate(),
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ flavourId: flavour!.id, weightKg: 1.15 }],
+    });
+
+    expect(count.items).toHaveLength(1);
+    expect(count.items[0].panId).toBeNull();
+    expect(count.items[0].flavourId).toBe(flavour!.id);
+    expect(count.items[0].weightKg).toBe(1.15);
+  });
+
   it("lets Store Manager correct same-day counts", async () => {
     const [displayPanUuid] = await seedStorePans(1);
     await movePanToDisplay({
@@ -95,6 +125,7 @@ describe("store EOD gelato counts", () => {
 
     expect(corrected.status).toBe("corrected");
     expect(corrected.correctedBy).toBe("staff-manager");
+    expect(corrected.items).toHaveLength(1);
     expect(corrected.items[0].weightKg).toBe(3.2);
   });
 

@@ -75,6 +75,16 @@ export function StoreDashboard() {
     <div className="page-stack">
       {error ? <div className="alert alert-danger">{error}</div> : null}
       {loading ? <p className="muted-copy">Loading store...</p> : null}
+      <section className="card">
+        <div className="card-title">Store actions</div>
+        <div className="quick-action-grid">
+          <a className="quick-action" href="#incoming-pans">Incoming pans</a>
+          <a className="quick-action" href="#move-to-display">Move to display</a>
+          <a className="quick-action" href="#eod-gelato-weights">EOD gelato weights</a>
+          <a className="quick-action" href="#store-supply-checklist">Supply count</a>
+        </div>
+      </section>
+      <div id="incoming-pans">
       <IncomingDispatches
         {...actor}
         locationId={locationId}
@@ -82,19 +92,24 @@ export function StoreDashboard() {
         flavours={flavours}
         onChanged={() => void load()}
       />
+      </div>
       <section className="card">
         <div className="card-title">Backup freezer</div>
         {backupPans.length === 0 ? <p className="muted-copy">No backup pans.</p> : null}
         <PanRows pans={backupPans} flavours={flavours} />
       </section>
-      <DisplayMovementForm {...actor} locationId={locationId} backupPans={backupPans} flavours={flavours} onChanged={() => void load()} />
+      <div id="move-to-display">
+        <DisplayMovementForm {...actor} locationId={locationId} backupPans={backupPans} flavours={flavours} onChanged={() => void load()} />
+      </div>
       <section className="card">
         <div className="card-title">Display freezer</div>
         {displayPans.length === 0 ? <p className="muted-copy">No display pans.</p> : null}
         <PanRows pans={displayPans} flavours={flavours} />
       </section>
       <EodGelatoCount {...actor} locationId={locationId} displayPans={displayPans} flavours={flavours} onChanged={() => void load()} />
+      <div id="store-supply-checklist">
       <InventoryCountPage title="Store supply checklist" scope="store" />
+      </div>
     </div>
   );
 }

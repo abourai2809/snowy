@@ -29,7 +29,7 @@ describe("ProductionForm", () => {
     await user.type(screen.getByLabelText("Pan count"), "3");
     await user.click(screen.getByRole("button", { name: "Save production" }));
 
-    const panList = await screen.findByLabelText("Lab pan list");
+    const panList = await screen.findByLabelText("Lab inventory list");
     expect(within(panList).getByText("PSP-20260523-01")).toBeInTheDocument();
     expect(within(panList).getByText("PSP-20260523-02")).toBeInTheDocument();
     expect(within(panList).getByText("PSP-20260523-03")).toBeInTheDocument();

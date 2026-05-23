@@ -195,7 +195,7 @@ export async function createProduction(input: ProductionInput): Promise<Producti
 
 export async function listLabPans(): Promise<Pan[]> {
   const pans = await listAllPans();
-  return pans.filter((pan) => pan.currentLocationId === labLocationId || pan.status === "in_transit");
+  return pans.filter((pan) => pan.currentLocationId === labLocationId);
 }
 
 export async function listAllPans(): Promise<Pan[]> {

@@ -736,6 +736,37 @@ button {
   min-height: 40px;
 }
 
+.quick-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quick-action {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--tlll);
+  color: var(--tldd);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+
+.eod-weight-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 8px;
+  align-items: end;
+}
+
+.eod-weight-row .danger-button {
+  grid-column: 1 / -1;
+}
+
 @media (min-width: 700px) {
   .app-shell {
     margin-top: 24px;
