@@ -725,6 +725,17 @@ button {
   padding: 0 10px;
 }
 
+.correction-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.correction-row .secondary-button {
+  min-height: 40px;
+}
+
 @media (min-width: 700px) {
   .app-shell {
     margin-top: 24px;

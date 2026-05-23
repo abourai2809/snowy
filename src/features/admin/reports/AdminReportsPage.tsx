@@ -1,0 +1,128 @@
+import { useEffect, useState } from "react";
+import type { AttendanceEntry } from "../../../domain/attendance";
+import type { Dispatch } from "../../../domain/dispatches";
+import type { StaffProfile } from "../../../domain/roles";
+import type { InventoryCountWithItems } from "../../../domain/supplies";
+import { listStaff } from "../staff/staffApi";
+import { listAttendanceForDate } from "../../attendance/attendanceApi";
+import { listInventoryCounts } from "../../inventory/inventoryApi";
+import { listLabDispatches } from "../../lab/labApi";
+import { listEodGelatoCounts, type EodCountWithItems } from "../../store/storeApi";
+import { CorrectionsPage } from "../corrections/CorrectionsPage";
+
+function todayDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function AdminReportsPage() {
+  const [dispatches, setDispatches] = useState<Dispatch[]>([]);
+  const [gelatoCounts, setGelatoCounts] = useState<EodCountWithItems[]>([]);
+  const [inventoryCounts, setInventoryCounts] = useState<InventoryCountWithItems[]>([]);
+  const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
+  const [staff, setStaff] = useState<StaffProfile[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      listLabDispatches(),
+      listEodGelatoCounts(),
+      listInventoryCounts(),
+      listAttendanceForDate(todayDate()),
+      listStaff(),
+    ])
+      .then(([dispatchRows, gelatoRows, inventoryRows, attendanceRows, staffRows]) => {
+        setDispatches(dispatchRows);
+        setGelatoCounts(gelatoRows);
+        setInventoryCounts(inventoryRows);
+        setAttendance(attendanceRows);
+        setStaff(staffRows);
+      })
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Unable to load reports."));
+  }, []);
+
+  const staffById = new Map(staff.map((item) => [item.id, item]));
+
+  return (
+    <div className="page-stack">
+      {error ? <div className="alert alert-danger">{error}</div> : null}
+      <section className="card">
+        <div className="card-title">Recent dispatches</div>
+        {dispatches.length === 0 ? <p className="muted-copy">No dispatches yet.</p> : null}
+        <div className="list-stack">
+          {dispatches.slice(0, 5).map((dispatch) => (
+            <div className="list-row" key={dispatch.id}>
+              <div>
+                <strong>{dispatch.dispatchCode}</strong>
+                <span>
+                  {dispatch.fromLocationId} to {dispatch.toLocationId}
+                </span>
+              </div>
+              <span className="badge">{dispatch.status.replace("_", " ")}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-title">EOD gelato</div>
+        {gelatoCounts.length === 0 ? <p className="muted-copy">No gelato counts yet.</p> : null}
+        <ReportRows
+          rows={gelatoCounts.map((count) => ({
+            id: count.id,
+            title: count.locationId,
+            detail: `${count.businessDate} / ${count.items.length} display pans`,
+            badge: count.status,
+          }))}
+        />
+      </section>
+
+      <section className="card">
+        <div className="card-title">Supply counts</div>
+        {inventoryCounts.length === 0 ? <p className="muted-copy">No supply counts yet.</p> : null}
+        <ReportRows
+          rows={inventoryCounts.map((count) => ({
+            id: count.id,
+            title: count.locationId,
+            detail: `${count.businessDate} / ${count.items.length} items`,
+            badge: count.status,
+          }))}
+        />
+      </section>
+
+      <section className="card">
+        <div className="card-title">Today roster</div>
+        {attendance.length === 0 ? <p className="muted-copy">No attendance yet today.</p> : null}
+        <ReportRows
+          rows={attendance.map((entry) => ({
+            id: entry.id,
+            title: staffById.get(entry.userId)?.name ?? entry.userId,
+            detail: entry.locationId ?? "No location",
+            badge: entry.status,
+          }))}
+        />
+      </section>
+
+      <CorrectionsPage />
+    </div>
+  );
+}
+
+function ReportRows({ rows }: { rows: Array<{ id: string; title: string; detail: string; badge: string }> }) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="list-stack">
+      {rows.map((row) => (
+        <div className="list-row" key={row.id}>
+          <div>
+            <strong>{row.title}</strong>
+            <span>{row.detail}</span>
+          </div>
+          <span className="badge">{row.badge}</span>
+        </div>
+      ))}
+    </div>
+  );
+}

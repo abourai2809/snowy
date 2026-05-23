@@ -468,3 +468,29 @@ export async function getEodCount(locationId: string, businessDate: string): Pro
   if (!count) return null;
   return { ...count, items: await listEodItems(count.id) };
 }
+
+export async function listEodGelatoCounts(): Promise<EodCountWithItems[]> {
+  if (!isSupabaseConfigured) {
+    return demoEodCounts.map((count) => ({
+      ...count,
+      items: demoEodCountItems.filter((item) => item.countId === count.id && item.panId !== null),
+    }));
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("end_of_day_counts")
+    .select("*")
+    .order("business_date", { ascending: false });
+
+  if (error) throw error;
+
+  return Promise.all(
+    data.map(async (row) => {
+      const count = mapEodCount(row);
+      return {
+        ...count,
+        items: (await listEodItems(count.id)).filter((item) => item.panId !== null),
+      };
+    }),
+  );
+}

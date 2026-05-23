@@ -15,6 +15,7 @@ import { LoginPage } from "../features/auth/LoginPage";
 import { RequireRole } from "../features/auth/RequireRole";
 import { AttendancePage } from "../features/attendance/AttendancePage";
 import { StaffPage } from "../features/admin/staff/StaffPage";
+import { AdminReportsPage } from "../features/admin/reports/AdminReportsPage";
 import { CatalogPage } from "../features/catalog/CatalogPage";
 import { LabDashboard } from "../features/lab/LabDashboard";
 import { StoreDashboard } from "../features/store/StoreDashboard";
@@ -93,6 +94,10 @@ function RoutePanel({ role, routeId }: { role: AppRole; routeId: RouteId }) {
       <LabDashboard />
     ) : routeId === "store" ? (
       <StoreDashboard />
+    ) : routeId === "stores" ? (
+      <RequireRole allow={["admin"]}>
+        <AdminReportsPage />
+      </RequireRole>
     ) : routeId === "catalog" ? (
       <RequireRole allow={["admin"]}>
         <CatalogPage />
