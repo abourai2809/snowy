@@ -1,4 +1,6 @@
-import { APP_ROLES, type AppRole, ROLE_LABELS } from "../../domain/roles";
+import type { ReactNode } from "react";
+import { LogOut } from "lucide-react";
+import type { AppRole } from "../../domain/roles";
 import type { RouteId } from "../routes";
 import { RoleNav } from "./RoleNav";
 
@@ -12,15 +14,15 @@ interface MobileShellProps {
   user: ShellUser;
   activeRoute: RouteId;
   onNavigate: (routeId: RouteId) => void;
-  onRoleChange?: (role: AppRole) => void;
-  children: React.ReactNode;
+  onLogout?: () => void;
+  children: ReactNode;
 }
 
 export function MobileShell({
   user,
   activeRoute,
   onNavigate,
-  onRoleChange,
+  onLogout,
   children,
 }: MobileShellProps) {
   return (
@@ -34,28 +36,18 @@ export function MobileShell({
           </div>
         </div>
 
-        <div className="user-chip">
-          <span>{user.name}</span>
-          <small>{user.locationLabel}</small>
+        <div className="header-actions">
+          <div className="user-chip">
+            <span>{user.name}</span>
+            <small>{user.locationLabel}</small>
+          </div>
+          {onLogout ? (
+            <button className="logout-button" type="button" aria-label="Sign out" onClick={onLogout}>
+              <LogOut size={18} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </header>
-
-      {onRoleChange ? (
-        <div className="role-switcher">
-          <label htmlFor="role-switch">Role</label>
-          <select
-            id="role-switch"
-            value={user.role}
-            onChange={(event) => onRoleChange(event.target.value as AppRole)}
-          >
-            {APP_ROLES.map((role) => (
-              <option value={role} key={role}>
-                {ROLE_LABELS[role]}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
 
       <main className="app-main">{children}</main>
 

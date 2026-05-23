@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { PackageSearch } from "lucide-react";
-import { type AppRole, ROLE_LABELS } from "../domain/roles";
+import { ClipboardCheck, PackageSearch } from "lucide-react";
+import { APP_ROLES, type AppRole, ROLE_LABELS } from "../domain/roles";
 import {
   canAccessRoute,
   getDefaultRouteForRole,
@@ -12,51 +12,102 @@ import {
 import { MobileShell, type ShellUser } from "./layout/MobileShell";
 
 interface AppProps {
-  initialRole?: AppRole;
+  initialRole?: AppRole | null;
 }
 
 const previewLocations: Record<AppRole, string> = {
   admin: "All locations",
   store_manager: "All stores",
   lab_manager: "Lab",
-  store_staff: "Assigned store",
+  store_staff: "Rajpur Road",
   lab_staff: "Lab",
 };
 
-export function App({ initialRole = "admin" }: AppProps) {
-  const [role, setRole] = useState<AppRole>(initialRole);
-  const [activeRoute, setActiveRoute] = useState<RouteId>(() => getDefaultRouteForRole(initialRole));
+export function App({ initialRole = null }: AppProps) {
+  const [role, setRole] = useState<AppRole | null>(initialRole);
+  const [activeRoute, setActiveRoute] = useState<RouteId>(() =>
+    getDefaultRouteForRole(initialRole ?? "admin"),
+  );
 
   useEffect(() => {
-    if (!canAccessRoute(role, activeRoute)) {
+    if (role && !canAccessRoute(role, activeRoute)) {
       setActiveRoute(getDefaultRouteForRole(role));
     }
   }, [activeRoute, role]);
 
-  const user: ShellUser = useMemo(
-    () => ({
-      name: ROLE_LABELS[role],
-      role,
-      locationLabel: previewLocations[role],
-    }),
+  const user: ShellUser | null = useMemo(
+    () =>
+      role
+        ? {
+            name: ROLE_LABELS[role],
+            role,
+            locationLabel: previewLocations[role],
+          }
+        : null,
     [role],
   );
+
+  if (!user) {
+    return (
+      <PersonaEntry
+        onSelectRole={(nextRole) => {
+          setRole(nextRole);
+          setActiveRoute(getDefaultRouteForRole(nextRole));
+        }}
+      />
+    );
+  }
 
   return (
     <MobileShell
       user={user}
       activeRoute={activeRoute}
       onNavigate={setActiveRoute}
-      onRoleChange={setRole}
+      onLogout={() => {
+        setRole(null);
+        setActiveRoute("dashboard");
+      }}
     >
-      <RoutePanel role={role} routeId={activeRoute} />
+      <RoutePanel role={user.role} routeId={activeRoute} />
     </MobileShell>
+  );
+}
+
+function PersonaEntry({ onSelectRole }: { onSelectRole: (role: AppRole) => void }) {
+  return (
+    <main className="login-screen">
+      <section className="login-panel" aria-labelledby="login-title">
+        <div className="login-brand">
+          <div className="login-mark">SO</div>
+          <h1 id="login-title">Snowy Owl</h1>
+          <p>Operations</p>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Open workspace</div>
+          <div className="persona-list">
+            {APP_ROLES.map((entryRole) => (
+              <button
+                className="persona-button"
+                type="button"
+                key={entryRole}
+                onClick={() => onSelectRole(entryRole)}
+              >
+                <ClipboardCheck size={16} aria-hidden="true" />
+                <span>{ROLE_LABELS[entryRole]}</span>
+                <small>{previewLocations[entryRole]}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
 
 function RoutePanel({ role, routeId }: { role: AppRole; routeId: RouteId }) {
   const route = getRoute(routeId);
-  const cards = getRouteCards(routeId);
+  const cards = getRouteCards(routeId, role);
   const Icon = route.icon;
 
   return (

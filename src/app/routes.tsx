@@ -83,14 +83,32 @@ export const APP_ROUTES: readonly AppRoute[] = [
   },
 ] as const;
 
+export const HOME_CARDS: Record<AppRole, readonly string[]> = {
+  admin: ["Catalog setup", "Staff roster", "Store reports", "Lab overview"],
+  store_manager: ["Incoming pans", "EOD review", "Same-day corrections", "Store supplies"],
+  lab_manager: ["Production batches", "Dispatch queue", "Raw materials", "Lab supplies"],
+  store_staff: ["Check in", "Incoming pans", "Move to display", "EOD display count"],
+  lab_staff: ["Check in", "Production entry", "Dispatch pans", "Lab supplies"],
+};
+
 export const OPERATION_CARDS: Record<RouteId, readonly string[]> = {
-  dashboard: ["Attendance", "Inventory", "Dispatches", "Counts"],
-  attendance: ["Check in", "Check out", "Roster"],
+  dashboard: [],
+  attendance: ["Check in", "Check out", "My history", "Weekly off"],
   lab: ["Production", "Dispatch", "Raw materials", "Lab supplies"],
-  store: ["Incoming", "Backup freezer", "Display freezer", "End of day"],
+  store: ["Incoming pans", "Backup freezer", "Move to display", "End of day"],
   stores: ["Rajpur Road", "Malsi", "Mussoorie", "All stores"],
   catalog: ["Flavours", "Products", "Store supplies", "Lab supplies", "Raw materials", "Packaging"],
   staff: ["Staff roster", "Holiday allowance", "Bonus days", "Inactive staff"],
+};
+
+const ROLE_ROUTE_CARDS: Partial<Record<RouteId, Partial<Record<AppRole, readonly string[]>>>> = {
+  attendance: {
+    admin: ["Today roster", "Salary sheet", "Holiday allowance", "Approvals"],
+  },
+  store: {
+    store_manager: ["Incoming pans", "Backup freezer", "Move to display", "Same-day corrections"],
+    store_staff: ["Incoming pans", "Backup freezer", "Move to display", "EOD display count"],
+  },
 };
 
 export function getRoutesForRole(role: AppRole): AppRoute[] {
@@ -115,7 +133,18 @@ export function getRoute(routeId: RouteId): AppRoute {
   return route;
 }
 
-export function getRouteCards(routeId: RouteId): readonly string[] {
+export function getRouteCards(routeId: RouteId, role?: AppRole): readonly string[] {
+  if (routeId === "dashboard" && role) {
+    return HOME_CARDS[role];
+  }
+
+  if (role) {
+    const roleCards = ROLE_ROUTE_CARDS[routeId]?.[role];
+    if (roleCards) {
+      return roleCards;
+    }
+  }
+
   return OPERATION_CARDS[routeId] ?? [];
 }
 

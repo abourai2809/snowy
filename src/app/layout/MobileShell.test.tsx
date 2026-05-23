@@ -43,20 +43,23 @@ describe("MobileShell", () => {
     renderApp(<App initialRole="store_staff" />);
 
     expect(screen.getByRole("button", { name: "Store" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Incoming pans" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Catalog" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Staff" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Role")).not.toBeInTheDocument();
   });
 
-  it("returns to an allowed route when the role changes", async () => {
+  it("uses the persona entry screen instead of exposing role switching inside staff views", async () => {
     const user = userEvent.setup();
 
-    renderApp(<App initialRole="admin" />);
-    await user.click(screen.getByRole("button", { name: "Catalog" }));
-    expect(screen.getByRole("heading", { name: "Catalog" })).toBeInTheDocument();
+    renderApp(<App />);
 
-    await user.selectOptions(screen.getByLabelText("Role"), "store_staff");
+    expect(screen.getByRole("heading", { name: "Snowy Owl" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Store Staff Rajpur Road" }));
 
     expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Catalog" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Role")).not.toBeInTheDocument();
   });
 });
