@@ -690,6 +690,11 @@ grant usage on schema public to service_role;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant all privileges on all tables in schema public to service_role;
 
+revoke execute on function public.current_app_user_id() from public, anon;
+revoke execute on function public.current_app_role() from public, anon;
+revoke execute on function public.has_app_role(public.app_role[]) from public, anon;
+revoke execute on function public.is_admin() from public, anon;
+
 grant execute on function public.current_app_user_id() to authenticated, service_role;
 grant execute on function public.current_app_role() to authenticated, service_role;
 grant execute on function public.has_app_role(public.app_role[]) to authenticated, service_role;
