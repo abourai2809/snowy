@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Local environment and Supabase state
+.env
+.env.*
+!.env.example
+.supabase/
+supabase/.branches/
+supabase/.temp/

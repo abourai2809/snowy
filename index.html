@@ -112,9 +112,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--fb);font-size:14px;m
 // ============================================================
 
 // ── CONFIG ──────────────────────────────────────────────────
-// Replace these two values after creating your Supabase project
-const SUPABASE_URL = "https://mbjiqmrsjjxputwveymi.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1iamlxbXJzamp4cHV0d3ZleW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MjQ4NzAsImV4cCI6MjA5NDAwMDg3MH0.J-qbf6vzzVhxgFNaTZY3SjPzw9JykABYoHWbw0gOMpQ";
+// Runtime config is injected by the real app build. Keep Supabase values out of source.
+const SUPABASE_URL = window.SNOWY_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = window.SNOWY_SUPABASE_ANON_KEY || "";
 
 // ── CLIENT ──────────────────────────────────────────────────
 // Lightweight fetch wrapper — no SDK dependency needed
