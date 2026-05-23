@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, requireSupabaseClient } from "../../lib/supabase";
-import type { Dispatch, DispatchItem } from "../../domain/dispatches";
+import type { Dispatch, DispatchItem, DispatchStatus } from "../../domain/dispatches";
 import { buildPanId, type GelatoBatch, type Pan } from "../../domain/pans";
 import type { Flavour } from "../../domain/flavours";
 
@@ -71,6 +71,16 @@ function mapDispatch(row: Record<string, unknown>): Dispatch {
     dispatchedBy: row.dispatched_by ? String(row.dispatched_by) : null,
     dispatchedAt: String(row.dispatched_at),
     notes: row.notes ? String(row.notes) : null,
+  };
+}
+
+function mapDispatchItem(row: Record<string, unknown>): DispatchItem {
+  return {
+    id: String(row.id),
+    dispatchId: String(row.dispatch_id),
+    panId: String(row.pan_uuid),
+    plannedWeightKg:
+      row.planned_weight_kg === null || row.planned_weight_kg === undefined ? null : Number(row.planned_weight_kg),
   };
 }
 
@@ -184,6 +194,11 @@ export async function createProduction(input: ProductionInput): Promise<Producti
 }
 
 export async function listLabPans(): Promise<Pan[]> {
+  const pans = await listAllPans();
+  return pans.filter((pan) => pan.currentLocationId === labLocationId || pan.status === "in_transit");
+}
+
+export async function listAllPans(): Promise<Pan[]> {
   if (!isSupabaseConfigured) {
     return [...demoPans];
   }
@@ -191,9 +206,22 @@ export async function listLabPans(): Promise<Pan[]> {
   const { data, error } = await requireSupabaseClient()
     .from("pans")
     .select("*")
-    .eq("current_location_id", labLocationId)
     .order("produced_at", { ascending: false });
 
+  if (error) throw error;
+  return data.map(mapPan);
+}
+
+export async function listPansByIds(panUuids: string[]): Promise<Pan[]> {
+  if (panUuids.length === 0) {
+    return [];
+  }
+
+  if (!isSupabaseConfigured) {
+    return demoPans.filter((pan) => panUuids.includes(pan.id));
+  }
+
+  const { data, error } = await requireSupabaseClient().from("pans").select("*").in("id", panUuids);
   if (error) throw error;
   return data.map(mapPan);
 }
@@ -218,6 +246,68 @@ export async function listLabDispatches(): Promise<Dispatch[]> {
   return data.map(mapDispatch);
 }
 
+export async function listDispatchItems(dispatchId: string): Promise<DispatchItem[]> {
+  if (!isSupabaseConfigured) {
+    return demoDispatchItems.filter((item) => item.dispatchId === dispatchId);
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("dispatch_items")
+    .select("*")
+    .eq("dispatch_id", dispatchId);
+
+  if (error) throw error;
+  return data.map(mapDispatchItem);
+}
+
+export async function updatePanState(
+  panUuid: string,
+  patch: Partial<Pick<Pan, "currentLocationId" | "panRole" | "status" | "currentWeightKg" | "active">>,
+): Promise<Pan> {
+  if (!isSupabaseConfigured) {
+    const existing = demoPans.find((pan) => pan.id === panUuid);
+    if (!existing) throw new Error("Pan not found.");
+    Object.assign(existing, patch);
+    return { ...existing };
+  }
+
+  const payload: Record<string, unknown> = {};
+  if ("currentLocationId" in patch) payload.current_location_id = patch.currentLocationId;
+  if ("panRole" in patch) payload.pan_role = patch.panRole;
+  if ("status" in patch) payload.status = patch.status;
+  if ("currentWeightKg" in patch) payload.current_weight_kg = patch.currentWeightKg;
+  if ("active" in patch) payload.active = patch.active;
+
+  const { data, error } = await requireSupabaseClient()
+    .from("pans")
+    .update(payload)
+    .eq("id", panUuid)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapPan(data);
+}
+
+export async function updateDispatchStatus(dispatchId: string, status: DispatchStatus): Promise<Dispatch> {
+  if (!isSupabaseConfigured) {
+    const existing = demoDispatches.find((dispatch) => dispatch.id === dispatchId);
+    if (!existing) throw new Error("Dispatch not found.");
+    existing.status = status;
+    return { ...existing };
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("dispatches")
+    .update({ status })
+    .eq("id", dispatchId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapDispatch(data);
+}
+
 export async function createDispatch(input: DispatchInput): Promise<Dispatch> {
   if (input.panUuids.length === 0) {
     throw new Error("Select at least one pan to dispatch.");
@@ -237,7 +327,7 @@ export async function createDispatch(input: DispatchInput): Promise<Dispatch> {
       dispatchCode: `DSP-${Date.now()}`,
       fromLocationId: labLocationId,
       toLocationId: input.toLocationId,
-      status: "in_transit",
+      status: "pending",
       dispatchedBy: input.dispatchedBy,
       dispatchedAt: new Date().toISOString(),
       notes: input.notes,
@@ -267,6 +357,9 @@ export async function createDispatch(input: DispatchInput): Promise<Dispatch> {
     .in("id", input.panUuids);
 
   if (panLookupError) throw panLookupError;
+  if (selected.length !== input.panUuids.length) {
+    throw new Error("One or more pans were not found.");
+  }
   if (selected.some((pan) => pan.status !== "available")) {
     throw new Error("Only available lab pans can be dispatched.");
   }
@@ -277,7 +370,7 @@ export async function createDispatch(input: DispatchInput): Promise<Dispatch> {
       dispatch_code: `DSP-${Date.now()}`,
       from_location_id: labLocationId,
       to_location_id: input.toLocationId,
-      status: "in_transit",
+      status: "pending",
       dispatched_by: input.dispatchedBy,
       notes: input.notes,
     })

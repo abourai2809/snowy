@@ -1,4 +1,4 @@
-export type DispatchStatus = "pending" | "in_transit" | "received" | "cancelled";
+export type DispatchStatus = "draft" | "pending" | "accepted" | "partially_accepted" | "rejected" | "cancelled";
 
 export interface Dispatch {
   id: string;

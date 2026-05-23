@@ -16,8 +16,8 @@ import { RequireRole } from "../features/auth/RequireRole";
 import { AttendancePage } from "../features/attendance/AttendancePage";
 import { StaffPage } from "../features/admin/staff/StaffPage";
 import { CatalogPage } from "../features/catalog/CatalogPage";
-import { StoreCatalogPreview } from "../features/catalog/CatalogReaders";
 import { LabDashboard } from "../features/lab/LabDashboard";
+import { StoreDashboard } from "../features/store/StoreDashboard";
 
 interface AppProps {
   initialRole?: AppRole | null;
@@ -92,7 +92,7 @@ function RoutePanel({ role, routeId }: { role: AppRole; routeId: RouteId }) {
     ) : routeId === "lab" ? (
       <LabDashboard />
     ) : routeId === "store" ? (
-      <StoreCatalogPreview />
+      <StoreDashboard />
     ) : routeId === "catalog" ? (
       <RequireRole allow={["admin"]}>
         <CatalogPage />
