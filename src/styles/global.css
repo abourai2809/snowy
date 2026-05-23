@@ -576,6 +576,70 @@ button {
   color: var(--muted);
 }
 
+.tabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--pkll);
+  overflow-x: auto;
+}
+
+.tab {
+  flex: 1;
+  min-height: 34px;
+  min-width: 82px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tab.act {
+  background: #fff;
+  color: var(--pkd);
+}
+
+.check-field {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.check-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pk);
+}
+
+.catalog-list {
+  margin-top: 12px;
+}
+
+.catalog-row {
+  align-items: flex-start;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.row-actions .secondary-button,
+.row-actions .danger-button {
+  min-height: 32px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
 @media (min-width: 700px) {
   .app-shell {
     margin-top: 24px;

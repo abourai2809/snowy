@@ -15,6 +15,8 @@ import { LoginPage } from "../features/auth/LoginPage";
 import { RequireRole } from "../features/auth/RequireRole";
 import { AttendancePage } from "../features/attendance/AttendancePage";
 import { StaffPage } from "../features/admin/staff/StaffPage";
+import { CatalogPage } from "../features/catalog/CatalogPage";
+import { LabCatalogPreview, StoreCatalogPreview } from "../features/catalog/CatalogReaders";
 
 interface AppProps {
   initialRole?: AppRole | null;
@@ -86,6 +88,14 @@ function RoutePanel({ role, routeId }: { role: AppRole; routeId: RouteId }) {
   const customContent =
     routeId === "attendance" ? (
       <AttendancePage />
+    ) : routeId === "lab" ? (
+      <LabCatalogPreview />
+    ) : routeId === "store" ? (
+      <StoreCatalogPreview />
+    ) : routeId === "catalog" ? (
+      <RequireRole allow={["admin"]}>
+        <CatalogPage />
+      </RequireRole>
     ) : routeId === "staff" ? (
       <RequireRole allow={["admin"]}>
         <StaffPage />
