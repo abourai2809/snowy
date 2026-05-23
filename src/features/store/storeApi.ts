@@ -51,6 +51,13 @@ export interface EodCountWithItems extends EodCount {
   items: EodCountItem[];
 }
 
+export interface EodGelatoCorrectionInput {
+  countId: string;
+  itemId: string;
+  weightKg: number;
+  correctedBy: string | null;
+}
+
 let demoReceipts: StoreReceipt[] = [];
 let demoDisplayMovements: DisplayMovement[] = [];
 let demoEodCounts: EodCount[] = [];
@@ -114,6 +121,10 @@ function mapEodCountItem(row: Record<string, unknown>): EodCountItem {
     unit: row.unit ? String(row.unit) : null,
     notes: row.notes ? String(row.notes) : null,
   };
+}
+
+function isGelatoEodItem(item: EodCountItem): boolean {
+  return item.panId !== null || item.flavourId !== null;
 }
 
 export function resetDemoStoreData() {
@@ -221,6 +232,21 @@ async function findEodCount(locationId: string, businessDate: string): Promise<E
     .select("*")
     .eq("location_id", locationId)
     .eq("business_date", businessDate)
+    .limit(1);
+
+  if (error) throw error;
+  return data[0] ? mapEodCount(data[0]) : null;
+}
+
+async function findEodCountById(countId: string): Promise<EodCount | null> {
+  if (!isSupabaseConfigured) {
+    return demoEodCounts.find((count) => count.id === countId) ?? null;
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("end_of_day_counts")
+    .select("*")
+    .eq("id", countId)
     .limit(1);
 
   if (error) throw error;
@@ -485,13 +511,53 @@ export async function getEodCount(locationId: string, businessDate: string): Pro
   return { ...count, items: await listEodItems(count.id) };
 }
 
+export async function correctEodGelatoCountItem(input: EodGelatoCorrectionInput): Promise<EodCountWithItems> {
+  if (!Number.isFinite(input.weightKg) || input.weightKg < 0) {
+    throw new Error("Corrected gelato weight must be zero or more.");
+  }
+
+  const count = await findEodCountById(input.countId);
+  if (!count) {
+    throw new Error("End-of-day count not found.");
+  }
+
+  const items = await listEodItems(input.countId);
+  const existingItem = items.find((item) => item.id === input.itemId);
+  if (!existingItem || !isGelatoEodItem(existingItem)) {
+    throw new Error("End-of-day gelato item not found.");
+  }
+
+  if (!isSupabaseConfigured) {
+    existingItem.weightKg = input.weightKg;
+    existingItem.unit = "kg";
+  } else {
+    const { error } = await requireSupabaseClient()
+      .from("end_of_day_count_items")
+      .update({
+        weight_kg: input.weightKg,
+        unit: "kg",
+      })
+      .eq("id", input.itemId)
+      .eq("count_id", input.countId);
+
+    if (error) throw error;
+  }
+
+  const corrected = await updateEodCount(input.countId, {
+    status: "corrected",
+    correctedBy: input.correctedBy,
+    correctedAt: new Date().toISOString(),
+    notes: count.notes,
+  });
+
+  return { ...corrected, items: (await listEodItems(input.countId)).filter(isGelatoEodItem) };
+}
+
 export async function listEodGelatoCounts(): Promise<EodCountWithItems[]> {
   if (!isSupabaseConfigured) {
     return demoEodCounts.map((count) => ({
       ...count,
-      items: demoEodCountItems.filter(
-        (item) => item.countId === count.id && (item.panId !== null || item.flavourId !== null),
-      ),
+      items: demoEodCountItems.filter((item) => item.countId === count.id && isGelatoEodItem(item)),
     }));
   }
 
@@ -507,7 +573,7 @@ export async function listEodGelatoCounts(): Promise<EodCountWithItems[]> {
       const count = mapEodCount(row);
       return {
         ...count,
-        items: (await listEodItems(count.id)).filter((item) => item.panId !== null || item.flavourId !== null),
+        items: (await listEodItems(count.id)).filter(isGelatoEodItem),
       };
     }),
   );

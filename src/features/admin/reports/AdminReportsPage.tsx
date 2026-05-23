@@ -9,6 +9,7 @@ import { listInventoryCounts } from "../../inventory/inventoryApi";
 import { listLabDispatches } from "../../lab/labApi";
 import { listEodGelatoCounts, type EodCountWithItems } from "../../store/storeApi";
 import { CorrectionsPage } from "../corrections/CorrectionsPage";
+import { EodGelatoCorrectionsPage } from "../corrections/EodGelatoCorrectionsPage";
 
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -70,7 +71,7 @@ export function AdminReportsPage() {
           rows={gelatoCounts.map((count) => ({
             id: count.id,
             title: count.locationId,
-            detail: `${count.businessDate} / ${count.items.length} display pans`,
+            detail: `${count.businessDate} / ${count.items.length} gelato lines`,
             badge: count.status,
           }))}
         />
@@ -102,6 +103,7 @@ export function AdminReportsPage() {
         />
       </section>
 
+      <EodGelatoCorrectionsPage />
       <CorrectionsPage />
     </div>
   );
