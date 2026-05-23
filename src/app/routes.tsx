@@ -91,6 +91,39 @@ export const HOME_CARDS: Record<AppRole, readonly string[]> = {
   lab_staff: ["Check in", "Production entry", "Dispatch pans", "Lab supplies"],
 };
 
+export const HOME_CARD_ROUTES: Record<AppRole, Record<string, RouteId>> = {
+  admin: {
+    "Catalog setup": "catalog",
+    "Staff roster": "staff",
+    "Store reports": "stores",
+    "Lab overview": "lab",
+  },
+  store_manager: {
+    "Incoming pans": "store",
+    "EOD review": "store",
+    "Same-day corrections": "store",
+    "Store supplies": "store",
+  },
+  lab_manager: {
+    "Production batches": "lab",
+    "Dispatch queue": "lab",
+    "Raw materials": "lab",
+    "Lab supplies": "lab",
+  },
+  store_staff: {
+    "Check in": "attendance",
+    "Incoming pans": "store",
+    "Move to display": "store",
+    "EOD display count": "store",
+  },
+  lab_staff: {
+    "Check in": "attendance",
+    "Production entry": "lab",
+    "Dispatch pans": "lab",
+    "Lab supplies": "lab",
+  },
+};
+
 export const OPERATION_CARDS: Record<RouteId, readonly string[]> = {
   dashboard: [],
   attendance: ["Check in", "Check out", "My history", "Weekly off"],
@@ -146,6 +179,14 @@ export function getRouteCards(routeId: RouteId, role?: AppRole): readonly string
   }
 
   return OPERATION_CARDS[routeId] ?? [];
+}
+
+export function getCardTargetRoute(routeId: RouteId, role: AppRole, card: string): RouteId | null {
+  if (routeId !== "dashboard") {
+    return null;
+  }
+
+  return HOME_CARD_ROUTES[role][card] ?? null;
 }
 
 export function getRouteSummary(routeId: RouteId): string {

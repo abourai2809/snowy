@@ -3,6 +3,7 @@ import { PackageSearch } from "lucide-react";
 import { type AppRole, ROLE_LABELS } from "../domain/roles";
 import {
   canAccessRoute,
+  getCardTargetRoute,
   getDefaultRouteForRole,
   getRoute,
   getRouteCards,
@@ -78,12 +79,20 @@ function AuthenticatedApp() {
         setActiveRoute("dashboard");
       }}
     >
-      <RoutePanel role={user.role} routeId={activeRoute} />
+      <RoutePanel role={user.role} routeId={activeRoute} onNavigate={setActiveRoute} />
     </MobileShell>
   );
 }
 
-function RoutePanel({ role, routeId }: { role: AppRole; routeId: RouteId }) {
+function RoutePanel({
+  role,
+  routeId,
+  onNavigate,
+}: {
+  role: AppRole;
+  routeId: RouteId;
+  onNavigate: (routeId: RouteId) => void;
+}) {
   const route = getRoute(routeId);
   const cards = getRouteCards(routeId, role);
   const Icon = route.icon;
@@ -128,7 +137,15 @@ function RoutePanel({ role, routeId }: { role: AppRole; routeId: RouteId }) {
       {customContent ?? (
         <div className="work-grid" aria-label={`${route.label} sections`}>
           {cards.map((card) => (
-            <button className="work-card" type="button" key={card}>
+            <button
+              className="work-card"
+              type="button"
+              key={card}
+              onClick={() => {
+                const targetRoute = getCardTargetRoute(routeId, role, card);
+                if (targetRoute) onNavigate(targetRoute);
+              }}
+            >
               <PackageSearch size={19} aria-hidden="true" />
               <span>{card}</span>
             </button>

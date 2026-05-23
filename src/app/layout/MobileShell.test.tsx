@@ -4,6 +4,7 @@ import { App } from "../App";
 import { MobileShell, type ShellUser } from "./MobileShell";
 import { resetDemoStaffData } from "../../features/admin/staff/staffApi";
 import { resetDemoAttendanceData } from "../../features/attendance/attendanceApi";
+import { isSupabaseConfigured } from "../../lib/supabase";
 
 const adminUser: ShellUser = {
   name: "Admin",
@@ -46,6 +47,16 @@ describe("MobileShell", () => {
     expect(onNavigate).toHaveBeenCalledWith("lab");
   });
 
+  it("navigates from dashboard cards", async () => {
+    const user = userEvent.setup();
+
+    renderApp(<App initialRole="admin" />);
+
+    await user.click(screen.getByRole("button", { name: "Catalog setup" }));
+
+    expect(screen.getByRole("heading", { name: "Catalog" })).toBeInTheDocument();
+  });
+
   it("hides Admin-only routes for store staff", () => {
     renderApp(<App initialRole="store_staff" />);
 
@@ -62,6 +73,11 @@ describe("MobileShell", () => {
     renderApp(<App />);
 
     expect(screen.getByRole("heading", { name: "Snowy Owl" })).toBeInTheDocument();
+    if (isSupabaseConfigured) {
+      expect(screen.queryByRole("button", { name: "Store Staff Malsi" })).not.toBeInTheDocument();
+      return;
+    }
+
     await user.click(screen.getByRole("button", { name: "Store Staff Malsi" }));
 
     expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();

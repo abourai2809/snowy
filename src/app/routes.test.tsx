@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAccessRoute, getDefaultRouteForRole, getRoutesForRole } from "./routes";
+import { canAccessRoute, getCardTargetRoute, getDefaultRouteForRole, getRoutesForRole } from "./routes";
 
 describe("role routes", () => {
   it("lets Admin reach operational and admin setup routes", () => {
@@ -37,5 +37,13 @@ describe("role routes", () => {
     expect(getDefaultRouteForRole("admin")).toBe("dashboard");
     expect(getDefaultRouteForRole("store_manager")).toBe("dashboard");
     expect(getDefaultRouteForRole("lab_manager")).toBe("dashboard");
+  });
+
+  it("maps dashboard cards to persona routes", () => {
+    expect(getCardTargetRoute("dashboard", "admin", "Catalog setup")).toBe("catalog");
+    expect(getCardTargetRoute("dashboard", "admin", "Staff roster")).toBe("staff");
+    expect(getCardTargetRoute("dashboard", "store_staff", "Check in")).toBe("attendance");
+    expect(getCardTargetRoute("dashboard", "store_staff", "Move to display")).toBe("store");
+    expect(getCardTargetRoute("dashboard", "lab_staff", "Production entry")).toBe("lab");
   });
 });
