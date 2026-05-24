@@ -133,7 +133,7 @@ describe("operations database schema", { skip: !connectionString }, () => {
     const row = result.rows[0];
     assert.equal(row.roles_count, 5);
     assert.equal(row.locations_count, 4);
-    assert.equal(row.flavours_count, 32);
+    assert.equal(row.flavours_count, 30);
     assert.equal(row.categories_count, 5);
     assert.equal(row.items_count, 17);
   });

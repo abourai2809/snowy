@@ -44,7 +44,7 @@ describe("AdminReportsPage", () => {
     await user.click(screen.getByRole("button", { name: "Stores" }));
 
     expect(await screen.findByText("EOD gelato corrections")).toBeInTheDocument();
-    const correctionInput = await screen.findByLabelText("PSP-20260520-01 Pure Sicilian Pistachio");
+    const correctionInput = await screen.findByLabelText("PIS-20260520-01 PISTACHTO");
     await user.clear(correctionInput);
     await user.type(correctionInput, "2.75");
     await user.click(screen.getByRole("button", { name: "Correct" }));
@@ -55,7 +55,7 @@ describe("AdminReportsPage", () => {
 });
 
 async function seedHistoricalEodGelatoCount() {
-  const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PSP");
+  const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PIS");
   expect(flavour).toBeDefined();
 
   const production = await createProduction({

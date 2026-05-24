@@ -12,7 +12,7 @@ describe("store incoming dispatches", () => {
 
   it("accepts a dispatched pan into store backup inventory", async () => {
     const flavours = await listFlavours(true);
-    const flavour = flavours.find((item) => item.shortCode === "PSP");
+    const flavour = flavours.find((item) => item.shortCode === "PIS");
     expect(flavour).toBeDefined();
 
     const production = await createProduction({
@@ -32,7 +32,7 @@ describe("store incoming dispatches", () => {
 
     const incoming = await listIncomingDispatches("malsi");
     expect(incoming).toHaveLength(1);
-    expect(incoming[0].pans[0].panId).toBe("PSP-20260523-01");
+    expect(incoming[0].pans[0].panId).toBe("PIS-20260523-01");
 
     await acceptIncomingDispatch({
       dispatchId: incoming[0].id,

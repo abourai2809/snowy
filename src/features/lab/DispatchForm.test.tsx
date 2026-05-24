@@ -10,7 +10,7 @@ describe("DispatchForm/lab dispatch flow", () => {
 
   it("moves selected lab inventory to store and leaves remaining pans available", async () => {
     const flavours = await listFlavours(true);
-    const flavour = flavours.find((item) => item.shortCode === "PSP");
+    const flavour = flavours.find((item) => item.shortCode === "PIS");
     expect(flavour).toBeDefined();
 
     const production = await createProduction({

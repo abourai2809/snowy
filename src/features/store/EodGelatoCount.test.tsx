@@ -64,7 +64,7 @@ describe("store EOD gelato counts", () => {
 
   it("records display flavour weights when a pan ID is unavailable", async () => {
     const [displayPanUuid] = await seedStorePans(1);
-    const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PSP");
+    const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PIS");
     expect(flavour).toBeDefined();
     await movePanToDisplay({
       panUuid: displayPanUuid,
@@ -146,7 +146,7 @@ describe("store EOD gelato counts", () => {
 
 async function seedStorePans(count: number) {
   const flavours = await listFlavours(true);
-  const flavour = flavours.find((item) => item.shortCode === "PSP");
+  const flavour = flavours.find((item) => item.shortCode === "PIS");
   expect(flavour).toBeDefined();
 
   const production = await createProduction({
