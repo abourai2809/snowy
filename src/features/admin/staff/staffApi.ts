@@ -120,6 +120,27 @@ function mapUserRow(row: Record<string, unknown>, bonusDaysBalance = 0): StaffPr
   };
 }
 
+async function getStaffProfileByAuthUserId(authUserId: string): Promise<StaffProfile> {
+  const { data, error } = await requireSupabaseClient()
+    .from("users")
+    .select("*, holiday_policies(bonus_days_balance)")
+    .eq("auth_user_id", authUserId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    await signOutStaff();
+    throw new Error("Signed-in account is not active in Snowy Owl Operations.");
+  }
+
+  const policies = data.holiday_policies as Array<{ bonus_days_balance?: number }> | null;
+  return mapUserRow(data, Number(policies?.[0]?.bonus_days_balance ?? 0));
+}
+
 export function resetDemoStaffData() {
   demoStaff = cloneDemoStaff(initialDemoStaff);
 }
@@ -127,6 +148,26 @@ export function resetDemoStaffData() {
 export function getDemoStaffByRole(role: AppRole): StaffProfile {
   const member = demoStaff.find((staff) => staff.role === role && staff.active) ?? demoStaff[0];
   return stripPassword(member);
+}
+
+export async function getCurrentStaffProfile(): Promise<StaffProfile | null> {
+  if (!isSupabaseConfigured) {
+    return null;
+  }
+
+  const supabase = requireSupabaseClient();
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) {
+    throw error;
+  }
+
+  const authUserId = data.session?.user.id;
+  if (!authUserId) {
+    return null;
+  }
+
+  return getStaffProfileByAuthUserId(authUserId);
 }
 
 export async function loginWithPhone(phone: string, password: string): Promise<StaffProfile> {
@@ -150,19 +191,7 @@ export async function loginWithPhone(phone: string, password: string): Promise<S
     throw authError;
   }
 
-  const { data, error } = await supabase
-    .from("users")
-    .select("*, holiday_policies(bonus_days_balance)")
-    .eq("auth_user_id", authData.user.id)
-    .eq("active", true)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const policies = data.holiday_policies as Array<{ bonus_days_balance?: number }> | null;
-  return mapUserRow(data, Number(policies?.[0]?.bonus_days_balance ?? 0));
+  return getStaffProfileByAuthUserId(authData.user.id);
 }
 
 export async function signOutStaff() {
