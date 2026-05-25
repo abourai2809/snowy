@@ -18,6 +18,11 @@ describe("InventoryCountPage", () => {
     const user = userEvent.setup();
     renderApp(<App initialRole="store_staff" />);
 
+    await user.click(screen.getByRole("button", { name: "Attendance" }));
+    await screen.findByLabelText("Work store");
+    await user.click(screen.getByRole("button", { name: "Check in" }));
+    expect(await screen.findByText("Checked in")).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Store" }));
     const form = await screen.findByRole("form", { name: "Store supply checklist form" });
 

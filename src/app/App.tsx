@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { PackageSearch } from "lucide-react";
-import { type AppRole, ROLE_LABELS } from "../domain/roles";
+import { isStoreRole, type AppRole, ROLE_LABELS } from "../domain/roles";
 import {
   canAccessRoute,
   getCardTargetRoute,
@@ -41,7 +41,7 @@ export function App({ initialRole = null }: AppProps) {
 }
 
 function AuthenticatedApp() {
-  const { profile, signOut } = useAuth();
+  const { activeAttendanceLoading, activeLocationId, profile, signOut } = useAuth();
   const role = profile?.role;
   const [activeRoute, setActiveRoute] = useState<RouteId>(() => getDefaultRouteForRole(role ?? "admin"));
 
@@ -52,17 +52,25 @@ function AuthenticatedApp() {
   }, [activeRoute, role]);
 
   const user: ShellUser | null = useMemo(
-    () =>
-      profile
-        ? {
-            name: profile.name,
-            role: profile.role,
-            locationLabel: profile.defaultLocationId
-              ? locationLabels[profile.defaultLocationId] ?? profile.defaultLocationId
-              : "All locations",
-          }
-        : null,
-    [profile],
+    () => {
+      if (!profile) return null;
+
+      const effectiveLocationId = isStoreRole(profile.role) ? activeLocationId : profile.defaultLocationId;
+      const locationLabel = activeAttendanceLoading && isStoreRole(profile.role)
+        ? "Loading location"
+        : effectiveLocationId
+          ? locationLabels[effectiveLocationId] ?? effectiveLocationId
+          : profile.role === "admin"
+            ? "All locations"
+            : "Check in required";
+
+      return {
+        name: profile.name,
+        role: profile.role,
+        locationLabel,
+      };
+    },
+    [activeAttendanceLoading, activeLocationId, profile],
   );
 
   if (!user) {

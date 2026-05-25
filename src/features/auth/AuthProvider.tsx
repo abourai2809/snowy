@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { AttendanceEntry } from "../../domain/attendance";
 import type { AppRole, StaffProfile } from "../../domain/roles";
 import {
   getDemoStaffByRole,
@@ -6,13 +7,18 @@ import {
   loginWithPhone,
   signOutStaff,
 } from "../admin/staff/staffApi";
+import { getTodayAttendance } from "../attendance/attendanceApi";
 
 interface AuthContextValue {
   profile: StaffProfile | null;
+  activeAttendance: AttendanceEntry | null;
+  activeAttendanceLoading: boolean;
+  activeLocationId: string | null;
   loading: boolean;
   error: string | null;
   login: (phone: string, password: string) => Promise<void>;
   quickLogin: (role: AppRole) => void;
+  refreshActiveAttendance: () => Promise<AttendanceEntry | null>;
   signOut: () => Promise<void>;
 }
 
@@ -27,6 +33,8 @@ export function AuthProvider({ initialRole = null, children }: AuthProviderProps
   const [profile, setProfile] = useState<StaffProfile | null>(() =>
     initialRole ? getDemoStaffByRole(initialRole) : null,
   );
+  const [activeAttendance, setActiveAttendance] = useState<AttendanceEntry | null>(null);
+  const [activeAttendanceLoading, setActiveAttendanceLoading] = useState(false);
   const [loading, setLoading] = useState(!initialRole);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,9 +68,59 @@ export function AuthProvider({ initialRole = null, children }: AuthProviderProps
     };
   }, [initialRole]);
 
+  const refreshActiveAttendance = useCallback(async () => {
+    if (!profile) {
+      setActiveAttendance(null);
+      setActiveAttendanceLoading(false);
+      return null;
+    }
+
+    setActiveAttendanceLoading(true);
+    try {
+      const entry = await getTodayAttendance(profile.id);
+      setActiveAttendance(entry);
+      return entry;
+    } finally {
+      setActiveAttendanceLoading(false);
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadActiveAttendance() {
+      if (!profile) {
+        setActiveAttendance(null);
+        setActiveAttendanceLoading(false);
+        return;
+      }
+
+      setActiveAttendanceLoading(true);
+      try {
+        const entry = await getTodayAttendance(profile.id);
+        if (mounted) {
+          setActiveAttendance(entry);
+        }
+      } finally {
+        if (mounted) {
+          setActiveAttendanceLoading(false);
+        }
+      }
+    }
+
+    void loadActiveAttendance();
+
+    return () => {
+      mounted = false;
+    };
+  }, [profile]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       profile,
+      activeAttendance,
+      activeAttendanceLoading,
+      activeLocationId: activeAttendance?.locationId ?? null,
       loading,
       error,
       async login(phone, password) {
@@ -80,17 +138,19 @@ export function AuthProvider({ initialRole = null, children }: AuthProviderProps
         setError(null);
         setProfile(getDemoStaffByRole(role));
       },
+      refreshActiveAttendance,
       async signOut() {
         setLoading(true);
         try {
           await signOutStaff();
           setProfile(null);
+          setActiveAttendance(null);
         } finally {
           setLoading(false);
         }
       },
     }),
-    [error, loading, profile],
+    [activeAttendance, activeAttendanceLoading, error, loading, profile, refreshActiveAttendance],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

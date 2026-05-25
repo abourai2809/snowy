@@ -27,7 +27,7 @@ describe("AdminReportsPage", () => {
   it("shows the attendance roster in Admin store oversight", async () => {
     const user = userEvent.setup();
     const storeStaff = getDemoStaffByRole("store_staff");
-    await checkIn(storeStaff, new Date());
+    await checkIn(storeStaff, storeStaff.defaultLocationId, new Date());
 
     renderApp(<App initialRole="admin" />);
     await user.click(screen.getByRole("button", { name: "Stores" }));

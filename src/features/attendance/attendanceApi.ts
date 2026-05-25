@@ -58,7 +58,11 @@ export async function listAttendanceForDate(date = getTodayKey()): Promise<Atten
   return data.map(mapAttendanceRow);
 }
 
-export async function checkIn(profile: StaffProfile, now = new Date()): Promise<AttendanceEntry> {
+export async function checkIn(profile: StaffProfile, locationId: string | null, now = new Date()): Promise<AttendanceEntry> {
+  if (!locationId) {
+    throw new Error("Work location is required.");
+  }
+
   const workDate = getTodayKey(now);
   const existing = await getTodayAttendance(profile.id, workDate);
 
@@ -70,7 +74,7 @@ export async function checkIn(profile: StaffProfile, now = new Date()): Promise<
     const created: AttendanceEntry = {
       id: `attendance-${Date.now()}`,
       userId: profile.id,
-      locationId: profile.defaultLocationId,
+      locationId,
       workDate,
       checkInAt: now.toISOString(),
       checkOutAt: null,
@@ -85,7 +89,7 @@ export async function checkIn(profile: StaffProfile, now = new Date()): Promise<
     .from("attendance_entries")
     .insert({
       user_id: profile.id,
-      location_id: profile.defaultLocationId,
+      location_id: locationId,
       work_date: workDate,
       check_in_at: now.toISOString(),
       status: "active",

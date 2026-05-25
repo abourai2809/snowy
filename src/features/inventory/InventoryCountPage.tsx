@@ -10,11 +10,15 @@ interface InventoryCountPageProps {
 }
 
 export function InventoryCountPage({ kinds, scope, title }: InventoryCountPageProps) {
-  const { profile } = useAuth();
-  const locationId = profile?.defaultLocationId ?? (scope === "lab" ? "lab" : null);
+  const { activeAttendanceLoading, activeLocationId, profile } = useAuth();
+  const locationId = scope === "store" ? activeLocationId : profile?.defaultLocationId ?? (scope === "lab" ? "lab" : null);
+
+  if (scope === "store" && activeAttendanceLoading) {
+    return <p className="muted-copy">Loading active store...</p>;
+  }
 
   if (!profile || !locationId) {
-    return <div className="alert alert-danger">Assigned location is required.</div>;
+    return <div className="alert alert-danger">Check in to select your store before using this checklist.</div>;
   }
 
   return (
@@ -25,7 +29,7 @@ export function InventoryCountPage({ kinds, scope, title }: InventoryCountPagePr
       locationId={locationId}
       actorId={profile.id}
       actorRole={profile.role}
-      actorLocationId={profile.defaultLocationId}
+      actorLocationId={locationId}
     />
   );
 }

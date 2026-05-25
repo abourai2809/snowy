@@ -49,7 +49,7 @@ describe("CatalogPage", () => {
     unmount();
 
     renderApp(<App initialRole="store_staff" />);
-    await user.click(screen.getByRole("button", { name: "Store" }));
+    await checkInStoreStaff(user);
 
     expect(await screen.findByText("Compostable Spoons")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add item" })).not.toBeInTheDocument();
@@ -70,8 +70,16 @@ describe("CatalogPage", () => {
     unmount();
 
     renderApp(<App initialRole="store_staff" />);
-    await user.click(screen.getByRole("button", { name: "Store" }));
+    await checkInStoreStaff(user);
 
     await waitFor(() => expect(screen.queryByText("Napkins")).not.toBeInTheDocument());
   });
 });
+
+async function checkInStoreStaff(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Attendance" }));
+  await screen.findByLabelText("Work store");
+  await user.click(screen.getByRole("button", { name: "Check in" }));
+  expect(await screen.findByText("Checked in")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Store" }));
+}

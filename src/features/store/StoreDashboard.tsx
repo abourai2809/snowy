@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Flavour } from "../../domain/flavours";
 import type { Pan } from "../../domain/pans";
+import { isStoreRole } from "../../domain/roles";
 import { useAuth } from "../auth/AuthProvider";
 import { listFlavours } from "../catalog/catalogApi";
 import { InventoryCountPage } from "../inventory/InventoryCountPage";
@@ -15,27 +16,31 @@ import {
 } from "./storeApi";
 
 export function StoreDashboard() {
-  const { profile } = useAuth();
+  const { activeAttendanceLoading, activeLocationId, profile } = useAuth();
   const [flavours, setFlavours] = useState<Flavour[]>([]);
   const [incoming, setIncoming] = useState<IncomingDispatch[]>([]);
   const [backupPans, setBackupPans] = useState<Pan[]>([]);
   const [displayPans, setDisplayPans] = useState<Pan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const locationId = profile?.defaultLocationId ?? null;
+  const locationId = profile && isStoreRole(profile.role) ? activeLocationId : profile?.defaultLocationId ?? null;
   const actor = useMemo(
     () => ({
       actorId: profile?.id ?? null,
       actorRole: profile?.role ?? "store_staff",
-      actorLocationId: profile?.defaultLocationId ?? null,
+      actorLocationId: locationId,
     }),
-    [profile],
+    [locationId, profile],
   );
 
   const load = useCallback(async () => {
+    if (activeAttendanceLoading) {
+      return;
+    }
+
     if (!locationId) {
       setLoading(false);
-      setError("Assigned store is required.");
+      setError("Check in to select your store before using store workflows.");
       return;
     }
 
@@ -57,7 +62,7 @@ export function StoreDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [locationId]);
+  }, [activeAttendanceLoading, locationId]);
 
   useEffect(() => {
     void load();
@@ -67,8 +72,12 @@ export function StoreDashboard() {
     return null;
   }
 
+  if (activeAttendanceLoading) {
+    return <p className="muted-copy">Loading active store...</p>;
+  }
+
   if (!locationId) {
-    return <div className="alert alert-danger">Assigned store is required.</div>;
+    return <div className="alert alert-danger">Check in to select your store before using store workflows.</div>;
   }
 
   return (
