@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { listFlavours, resetDemoCatalogData } from "../catalog/catalogApi";
 import { createDispatch, createProduction, resetDemoLabData } from "../lab/labApi";
+import { renderApp, screen, waitFor } from "../../test/render";
+import { resetDemoDeepFreezerData, submitDeepFreezerCount } from "./deepFreezerApi";
+import { EodGelatoCount } from "./EodGelatoCount";
 import {
   acceptIncomingDispatch,
   listIncomingDispatches,
+  listDisplayPans,
   movePanToDisplay,
   resetDemoStoreData,
   submitEodGelatoCount,
@@ -18,6 +22,7 @@ describe("store EOD gelato counts", () => {
     resetDemoCatalogData();
     resetDemoLabData();
     resetDemoStoreData();
+    resetDemoDeepFreezerData();
   });
 
   it("records only display pan weights", async () => {
@@ -166,6 +171,68 @@ describe("store EOD gelato counts", () => {
         items: [],
       }),
     ).rejects.toThrow("Store users can only work in their assigned store.");
+  });
+
+  it("prefills relevant EOD rows without an add-line dropdown", async () => {
+    const flavours = await listFlavours(true);
+    const flavour = flavours.find((item) => item.shortCode === "PIS");
+    expect(flavour).toBeDefined();
+    await submitDeepFreezerCount({
+      locationId: "malsi",
+      businessDate: "2020-01-01",
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ flavourId: flavour!.id, weightKg: 2 }],
+    });
+
+    renderApp(
+      <EodGelatoCount
+        locationId="malsi"
+        displayPans={[]}
+        flavours={flavours}
+        onChanged={() => undefined}
+        actorId="staff-store"
+        actorRole="store_staff"
+        actorLocationId="malsi"
+      />,
+    );
+
+    const weightInput = await screen.findByLabelText(`EOD weight ${flavour!.name}`);
+    expect(weightInput).toHaveValue(0);
+    expect(screen.queryByRole("button", { name: "Add gelato line" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/EOD gelato item/)).not.toBeInTheDocument();
+  });
+
+  it("shows flavour first and pan ID second for display pan rows", async () => {
+    const [displayPanUuid] = await seedStorePans(1);
+    const flavours = await listFlavours(true);
+    await movePanToDisplay({
+      panUuid: displayPanUuid,
+      storeLocationId: "malsi",
+      fillState: "full",
+      weightKg: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    renderApp(
+      <EodGelatoCount
+        locationId="malsi"
+        displayPans={await listDisplayPans("malsi")}
+        flavours={flavours}
+        onChanged={() => undefined}
+        actorId="staff-store"
+        actorRole="store_staff"
+        actorLocationId="malsi"
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText("PISTACHTO")).toBeInTheDocument());
+    expect(screen.getByText(/PIS-20260523-01/)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });
 

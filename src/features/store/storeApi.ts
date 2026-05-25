@@ -4,6 +4,7 @@ import type { Pan } from "../../domain/pans";
 import { isStoreRole, type AppRole } from "../../domain/roles";
 import { validateGelatoPanWeightKg } from "../../domain/weights";
 import { isSupabaseConfigured, requireSupabaseClient } from "../../lib/supabase";
+import { listFlavours } from "../catalog/catalogApi";
 import {
   listAllPans,
   listDispatchItems,
@@ -448,7 +449,7 @@ export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCou
 
   const displayPans = await listDisplayPans(input.locationId);
   const displayPanById = new Map(displayPans.map((pan) => [pan.id, pan]));
-  const displayFlavourIds = new Set(displayPans.map((pan) => pan.flavourId));
+  const activeFlavourIds = new Set((await listFlavours(true)).map((flavour) => flavour.id));
   const normalizedItems = input.items.map((item) => ({
     ...item,
     panUuid: item.panUuid ?? null,
@@ -458,9 +459,9 @@ export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCou
   if (hasInvalidPan) {
     throw new Error("End-of-day gelato counts can only include display pans.");
   }
-  const hasInvalidFlavour = normalizedItems.some((item) => !item.flavourId || !displayFlavourIds.has(item.flavourId));
+  const hasInvalidFlavour = normalizedItems.some((item) => !item.flavourId || !activeFlavourIds.has(item.flavourId));
   if (hasInvalidFlavour) {
-    throw new Error("End-of-day gelato counts can only include display flavours or pans.");
+    throw new Error("End-of-day gelato counts can only include active flavours or display pans.");
   }
 
   const existing = await findEodCount(input.locationId, input.businessDate);
