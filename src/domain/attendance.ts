@@ -17,7 +17,7 @@ export function getTodayKey(now = new Date()): string {
 
 export function calculateHours(checkInAt: string, checkOutAt: string): number {
   const ms = new Date(checkOutAt).getTime() - new Date(checkInAt).getTime();
-  return Math.max(0, Math.round((ms / 36_000) / 10));
+  return Math.max(0, Math.round((ms / 3_600_000) * 10) / 10);
 }
 
 export function isCheckedOut(entry: AttendanceEntry | null): boolean {
