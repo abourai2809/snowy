@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { AttendanceEntry } from "../../domain/attendance";
+import { isCheckedOut, type AttendanceEntry } from "../../domain/attendance";
 import type { AppRole, StaffProfile } from "../../domain/roles";
 import {
   getDemoStaffByRole,
@@ -120,7 +120,7 @@ export function AuthProvider({ initialRole = null, children }: AuthProviderProps
       profile,
       activeAttendance,
       activeAttendanceLoading,
-      activeLocationId: activeAttendance?.locationId ?? null,
+      activeLocationId: activeAttendance && !isCheckedOut(activeAttendance) ? activeAttendance.locationId : null,
       loading,
       error,
       async login(phone, password) {
