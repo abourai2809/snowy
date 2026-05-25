@@ -7,6 +7,7 @@ import { listFlavours } from "../catalog/catalogApi";
 import { InventoryCountPage } from "../inventory/InventoryCountPage";
 import { IncomingDispatches } from "./IncomingDispatches";
 import { DisplayMovementForm } from "./DisplayMovementForm";
+import { DeepFreezerCountForm } from "./DeepFreezerCountForm";
 import { EodGelatoCount } from "./EodGelatoCount";
 import {
   listBackupPans,
@@ -89,6 +90,7 @@ export function StoreDashboard() {
         <div className="quick-action-grid">
           <a className="quick-action" href="#incoming-pans">Incoming pans</a>
           <a className="quick-action" href="#move-to-display">Move to display</a>
+          <a className="quick-action" href="#deep-freezer-weights">Deep freezer count</a>
           <a className="quick-action" href="#eod-gelato-weights">EOD gelato weights</a>
           <a className="quick-action" href="#store-supply-checklist">Supply count</a>
         </div>
@@ -115,12 +117,17 @@ export function StoreDashboard() {
         {displayPans.length === 0 ? <p className="muted-copy">No display pans.</p> : null}
         <PanRows pans={displayPans} flavours={flavours} />
       </section>
+      <DeepFreezerCountForm {...actor} locationId={locationId} businessDate={todayDate()} flavours={flavours} />
       <EodGelatoCount {...actor} locationId={locationId} displayPans={displayPans} flavours={flavours} onChanged={() => void load()} />
       <div id="store-supply-checklist">
       <InventoryCountPage title="Store supply checklist" scope="store" />
       </div>
     </div>
   );
+}
+
+function todayDate(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function PanRows({ pans, flavours }: { pans: Pan[]; flavours: Flavour[] }) {

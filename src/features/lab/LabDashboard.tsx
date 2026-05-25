@@ -6,6 +6,7 @@ import { listFlavours } from "../catalog/catalogApi";
 import { useAuth } from "../auth/AuthProvider";
 import { InventoryCountPage } from "../inventory/InventoryCountPage";
 import { DispatchForm } from "./DispatchForm";
+import { LabRequirements } from "./LabRequirements";
 import { PanList } from "./PanList";
 import { ProductionForm } from "./ProductionForm";
 import { listAvailableLabPans, listLabDispatches, listLabPans } from "./labApi";
@@ -43,6 +44,7 @@ export function LabDashboard() {
       <ProductionForm flavours={flavours} profile={profile} onCreated={refresh} />
       <PanList pans={pans} flavours={flavours} />
       <DispatchForm pans={availablePans} flavours={flavours} profile={profile} onDispatched={refresh} />
+      <LabRequirements />
       <InventoryCountPage title="Lab checklist" scope="lab" kinds={["raw_material", "supply", "packaging"]} />
       <section className="card">
         <div className="card-title">Recent dispatches</div>

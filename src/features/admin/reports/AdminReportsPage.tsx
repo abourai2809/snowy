@@ -10,6 +10,7 @@ import { listLabDispatches } from "../../lab/labApi";
 import { listEodGelatoCounts, type EodCountWithItems } from "../../store/storeApi";
 import { CorrectionsPage } from "../corrections/CorrectionsPage";
 import { EodGelatoCorrectionsPage } from "../corrections/EodGelatoCorrectionsPage";
+import { AdminDeepFreezerTools } from "./AdminDeepFreezerTools";
 
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -103,6 +104,7 @@ export function AdminReportsPage() {
         />
       </section>
 
+      <AdminDeepFreezerTools />
       <EodGelatoCorrectionsPage />
       <CorrectionsPage />
     </div>

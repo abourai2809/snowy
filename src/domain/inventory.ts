@@ -45,3 +45,48 @@ export interface EodCountItem {
   unit: string | null;
   notes: string | null;
 }
+
+export interface DeepFreezerCount {
+  id: string;
+  locationId: string;
+  businessDate: string;
+  status: CountStatus;
+  submittedBy: string | null;
+  submittedAt: string;
+  correctedBy: string | null;
+  correctedAt: string | null;
+  notes: string | null;
+}
+
+export interface DeepFreezerCountItem {
+  id: string;
+  countId: string;
+  flavourId: string;
+  flavourName: string;
+  weightKg: number;
+  unit: "kg";
+  notes: string | null;
+}
+
+export interface DeepFreezerCountWithItems extends DeepFreezerCount {
+  items: DeepFreezerCountItem[];
+}
+
+export interface StoreFlavourTarget {
+  id: string;
+  locationId: string;
+  flavourId: string;
+  targetWeightKg: number;
+  active: boolean;
+}
+
+export interface StoreGelatoRequirement {
+  id: string;
+  locationId: string;
+  locationName: string;
+  flavourId: string;
+  flavourName: string;
+  currentWeightKg: number;
+  targetWeightKg: number;
+  neededWeightKg: number;
+}
