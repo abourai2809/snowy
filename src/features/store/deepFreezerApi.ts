@@ -1,4 +1,5 @@
 import type {
+  DeepFreezerBalance,
   DeepFreezerCount,
   DeepFreezerCountItem,
   DeepFreezerCountWithItems,
@@ -9,7 +10,8 @@ import { isStoreRole, type AppRole } from "../../domain/roles";
 import { isSupabaseConfigured, requireSupabaseClient } from "../../lib/supabase";
 import { listLocations } from "../admin/staff/staffApi";
 import { listFlavours } from "../catalog/catalogApi";
-import type { StoreActor } from "./storeApi";
+import { listDispatchItems, listPansByIds } from "../lab/labApi";
+import { listDisplayMovements, listStoreReceipts, type StoreActor } from "./storeApi";
 
 export interface DeepFreezerCountInput extends StoreActor {
   locationId: string;
@@ -78,6 +80,26 @@ function mapTarget(row: Record<string, unknown>): StoreFlavourTarget {
     targetWeightKg: Number(row.target_weight_kg ?? 0),
     active: Boolean(row.active),
   };
+}
+
+function roundWeightKg(value: number): number {
+  return Number(Math.max(0, value).toFixed(3));
+}
+
+function addWeight(weights: Map<string, number>, flavourId: string, weightKg: number) {
+  weights.set(flavourId, (weights.get(flavourId) ?? 0) + weightKg);
+}
+
+function baselineCutoffMs(count: DeepFreezerCountWithItems | null): number {
+  if (!count) {
+    return 0;
+  }
+
+  return new Date(`${count.businessDate}T23:59:59.999Z`).getTime();
+}
+
+function happenedAfterBaseline(timestamp: string, baselineMs: number): boolean {
+  return new Date(timestamp).getTime() > baselineMs;
 }
 
 export function resetDemoDeepFreezerData() {
@@ -319,6 +341,78 @@ export async function getLatestDeepFreezerCount(locationId: string): Promise<Dee
   );
 }
 
+async function listReceivedWeightsByFlavour(locationId: string, baselineMs: number): Promise<Map<string, number>> {
+  const receivedWeights = new Map<string, number>();
+  const receipts = (await listStoreReceipts(locationId)).filter(
+    (receipt) => receipt.status === "accepted" && happenedAfterBaseline(receipt.receivedAt, baselineMs),
+  );
+
+  await Promise.all(
+    receipts.map(async (receipt) => {
+      const items = await listDispatchItems(receipt.dispatchId);
+      const pans = await listPansByIds(items.map((item) => item.panId));
+      const panById = new Map(pans.map((pan) => [pan.id, pan]));
+
+      items.forEach((item) => {
+        const pan = panById.get(item.panId);
+        if (!pan) return;
+
+        addWeight(receivedWeights, pan.flavourId, item.plannedWeightKg ?? pan.fullWeightKg ?? pan.currentWeightKg ?? 0);
+      });
+    }),
+  );
+
+  return receivedWeights;
+}
+
+async function listDisplayMovedWeightsByFlavour(locationId: string, baselineMs: number): Promise<Map<string, number>> {
+  const displayMovedWeights = new Map<string, number>();
+  const movements = (await listDisplayMovements(locationId)).filter((movement) =>
+    happenedAfterBaseline(movement.movedAt, baselineMs),
+  );
+  const pans = await listPansByIds([...new Set(movements.map((movement) => movement.panId))]);
+  const panById = new Map(pans.map((pan) => [pan.id, pan]));
+
+  movements.forEach((movement) => {
+    const pan = panById.get(movement.panId);
+    if (!pan) return;
+
+    addWeight(displayMovedWeights, pan.flavourId, movement.weightKg ?? 0);
+  });
+
+  return displayMovedWeights;
+}
+
+export async function listProjectedDeepFreezerBalances(locationId: string): Promise<DeepFreezerBalance[]> {
+  const [flavours, latestCount] = await Promise.all([listFlavours(true), getLatestDeepFreezerCount(locationId)]);
+  const baselineMs = baselineCutoffMs(latestCount);
+  const baseWeights = new Map(latestCount?.items.map((item) => [item.flavourId, item.weightKg]) ?? []);
+  const [receivedWeights, displayMovedWeights] = await Promise.all([
+    listReceivedWeightsByFlavour(locationId, baselineMs),
+    listDisplayMovedWeightsByFlavour(locationId, baselineMs),
+  ]);
+
+  return flavours
+    .map((flavour): DeepFreezerBalance => {
+      const baseWeightKg = baseWeights.get(flavour.id) ?? 0;
+      const receivedWeightKg = receivedWeights.get(flavour.id) ?? 0;
+      const displayMovedWeightKg = displayMovedWeights.get(flavour.id) ?? 0;
+
+      return {
+        locationId,
+        flavourId: flavour.id,
+        flavourName: flavour.name,
+        baseWeightKg,
+        receivedWeightKg,
+        displayMovedWeightKg,
+        currentWeightKg: roundWeightKg(baseWeightKg + receivedWeightKg - displayMovedWeightKg),
+        sourceCountId: latestCount?.id ?? null,
+        sourceBusinessDate: latestCount?.businessDate ?? null,
+      };
+    })
+    .sort((a, b) => a.flavourName.localeCompare(b.flavourName));
+}
+
 export async function listStoreFlavourTargets(locationId?: string): Promise<StoreFlavourTarget[]> {
   if (!isSupabaseConfigured) {
     return demoStoreTargets.filter((target) => target.active && (!locationId || target.locationId === locationId));
@@ -381,23 +475,17 @@ export async function saveStoreFlavourTarget(input: StoreFlavourTargetInput): Pr
 }
 
 export async function listStoreGelatoRequirements(): Promise<StoreGelatoRequirement[]> {
-  const [locations, flavours, targets, counts] = await Promise.all([
+  const [locations, flavours, targets] = await Promise.all([
     listLocations(),
     listFlavours(true),
     listStoreFlavourTargets(),
-    listDeepFreezerCounts(),
   ]);
   const stores = locations.filter((location) => location.type === "store");
   const flavourById = new Map(flavours.map((flavour) => [flavour.id, flavour]));
   const storeById = new Map(stores.map((store) => [store.id, store]));
-  const latestByStore = new Map<string, DeepFreezerCountWithItems>();
-
-  stores.forEach((store) => {
-    const latest = counts
-      .filter((count) => count.locationId === store.id)
-      .sort((a, b) => `${b.businessDate}-${b.submittedAt}`.localeCompare(`${a.businessDate}-${a.submittedAt}`))[0];
-    if (latest) latestByStore.set(store.id, latest);
-  });
+  const balancesByStore = new Map(
+    await Promise.all(stores.map(async (store) => [store.id, await listProjectedDeepFreezerBalances(store.id)] as const)),
+  );
 
   return targets
     .map((target): StoreGelatoRequirement | null => {
@@ -406,7 +494,7 @@ export async function listStoreGelatoRequirements(): Promise<StoreGelatoRequirem
       if (!store || !flavour || target.targetWeightKg <= 0) return null;
 
       const currentWeightKg =
-        latestByStore.get(target.locationId)?.items.find((item) => item.flavourId === target.flavourId)?.weightKg ?? 0;
+        balancesByStore.get(target.locationId)?.find((item) => item.flavourId === target.flavourId)?.currentWeightKg ?? 0;
       const neededWeightKg = Math.max(0, target.targetWeightKg - currentWeightKg);
       if (neededWeightKg <= 0) return null;
 

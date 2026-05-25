@@ -80,6 +80,18 @@ export interface StoreFlavourTarget {
   active: boolean;
 }
 
+export interface DeepFreezerBalance {
+  locationId: string;
+  flavourId: string;
+  flavourName: string;
+  baseWeightKg: number;
+  receivedWeightKg: number;
+  displayMovedWeightKg: number;
+  currentWeightKg: number;
+  sourceCountId: string | null;
+  sourceBusinessDate: string | null;
+}
+
 export interface StoreGelatoRequirement {
   id: string;
   locationId: string;

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { Flavour } from "../../domain/flavours";
 import type { StoreActor } from "./storeApi";
-import { getDeepFreezerCount, getLatestDeepFreezerCount, submitDeepFreezerCount } from "./deepFreezerApi";
+import { getDeepFreezerCount, listProjectedDeepFreezerBalances, submitDeepFreezerCount } from "./deepFreezerApi";
 
 interface DeepFreezerCountFormProps extends StoreActor {
   title?: string;
@@ -31,14 +31,16 @@ export function DeepFreezerCountForm({
 
     async function loadWeights() {
       try {
-        const [existing, latest] = await Promise.all([
+        const [existing, projectedBalances] = await Promise.all([
           getDeepFreezerCount(locationId, businessDate),
-          getLatestDeepFreezerCount(locationId),
+          listProjectedDeepFreezerBalances(locationId),
         ]);
         if (!mounted) return;
 
-        const sourceItems = existing?.items ?? latest?.items ?? [];
-        const sourceWeights = new Map(sourceItems.map((item) => [item.flavourId, item.weightKg]));
+        const sourceWeights = new Map(
+          existing?.items.map((item) => [item.flavourId, item.weightKg]) ??
+            projectedBalances.map((item) => [item.flavourId, item.currentWeightKg]),
+        );
         setWeights(
           Object.fromEntries(flavours.map((flavour) => [flavour.id, String(sourceWeights.get(flavour.id) ?? 0)])),
         );

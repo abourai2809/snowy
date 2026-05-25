@@ -330,6 +330,21 @@ export async function listIncomingDispatches(locationId: string): Promise<Incomi
   );
 }
 
+export async function listStoreReceipts(locationId?: string): Promise<StoreReceipt[]> {
+  if (!isSupabaseConfigured) {
+    return demoReceipts.filter((receipt) => !locationId || receipt.locationId === locationId);
+  }
+
+  let query = requireSupabaseClient().from("store_receipts").select("*").order("received_at");
+  if (locationId) {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.map(mapReceipt);
+}
+
 export async function acceptIncomingDispatch(input: AcceptDispatchInput): Promise<StoreReceipt> {
   assertStoreLocation(input, input.locationId);
 
@@ -366,6 +381,21 @@ export async function listBackupPans(locationId: string): Promise<Pan[]> {
 export async function listDisplayPans(locationId: string): Promise<Pan[]> {
   const pans = await listStorePans(locationId);
   return pans.filter((pan) => pan.status === "display" && pan.panRole === "display");
+}
+
+export async function listDisplayMovements(locationId?: string): Promise<DisplayMovement[]> {
+  if (!isSupabaseConfigured) {
+    return demoDisplayMovements.filter((movement) => !locationId || movement.storeLocationId === locationId);
+  }
+
+  let query = requireSupabaseClient().from("display_movements").select("*").order("moved_at");
+  if (locationId) {
+    query = query.eq("store_location_id", locationId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.map(mapDisplayMovement);
 }
 
 export async function movePanToDisplay(input: DisplayMovementInput): Promise<DisplayMovement> {
