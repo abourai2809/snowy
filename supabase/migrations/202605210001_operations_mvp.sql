@@ -104,7 +104,7 @@ create type public.dispatch_status as enum ('draft', 'pending', 'accepted', 'par
 create type public.receipt_status as enum ('accepted', 'rejected');
 create type public.fill_state as enum ('full', 'partial');
 create type public.count_status as enum ('draft', 'submitted', 'corrected');
-create type public.attendance_status as enum ('active', 'approved', 'pending', 'rejected', 'corrected');
+create type public.attendance_status as enum ('active', 'checked_out', 'corrected', 'void', 'approved', 'pending', 'rejected');
 
 create table public.roles (
   id public.app_role primary key,
