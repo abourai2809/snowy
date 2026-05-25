@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, requireSupabaseClient } from "../../lib/supabase";
-import { calculateHours, getTodayKey, type AttendanceEntry } from "../../domain/attendance";
+import { calculateHours, getTodayKey, isCheckedOut, type AttendanceEntry } from "../../domain/attendance";
 import type { StaffProfile } from "../../domain/roles";
 
 let demoAttendance: AttendanceEntry[] = [];
@@ -21,9 +21,13 @@ export function resetDemoAttendanceData() {
   demoAttendance = [];
 }
 
-export async function getTodayAttendance(userId: string, date = getTodayKey()): Promise<AttendanceEntry | null> {
+function sortAttendance(entries: AttendanceEntry[]): AttendanceEntry[] {
+  return [...entries].sort((a, b) => new Date(a.checkInAt).getTime() - new Date(b.checkInAt).getTime());
+}
+
+export async function listTodayAttendanceForUser(userId: string, date = getTodayKey()): Promise<AttendanceEntry[]> {
   if (!isSupabaseConfigured) {
-    return demoAttendance.find((entry) => entry.userId === userId && entry.workDate === date) ?? null;
+    return sortAttendance(demoAttendance.filter((entry) => entry.userId === userId && entry.workDate === date));
   }
 
   const { data, error } = await requireSupabaseClient()
@@ -31,13 +35,23 @@ export async function getTodayAttendance(userId: string, date = getTodayKey()): 
     .select("*")
     .eq("user_id", userId)
     .eq("work_date", date)
-    .maybeSingle();
+    .order("check_in_at");
 
   if (error) {
     throw error;
   }
 
-  return data ? mapAttendanceRow(data) : null;
+  return data.map(mapAttendanceRow);
+}
+
+export async function getActiveAttendance(userId: string, date = getTodayKey()): Promise<AttendanceEntry | null> {
+  const entries = await listTodayAttendanceForUser(userId, date);
+  return entries.find((entry) => !isCheckedOut(entry)) ?? null;
+}
+
+export async function getTodayAttendance(userId: string, date = getTodayKey()): Promise<AttendanceEntry | null> {
+  const entries = await listTodayAttendanceForUser(userId, date);
+  return entries.find((entry) => !isCheckedOut(entry)) ?? entries.at(-1) ?? null;
 }
 
 export async function listAttendanceForDate(date = getTodayKey()): Promise<AttendanceEntry[]> {
@@ -64,15 +78,15 @@ export async function checkIn(profile: StaffProfile, locationId: string | null, 
   }
 
   const workDate = getTodayKey(now);
-  const existing = await getTodayAttendance(profile.id, workDate);
+  const existing = await getActiveAttendance(profile.id, workDate);
 
   if (existing) {
-    throw new Error("Attendance is already started for today.");
+    throw new Error("Attendance is already active. Check out before starting another shift.");
   }
 
   if (!isSupabaseConfigured) {
     const created: AttendanceEntry = {
-      id: `attendance-${Date.now()}`,
+      id: `attendance-${Date.now()}-${demoAttendance.length}`,
       userId: profile.id,
       locationId,
       workDate,

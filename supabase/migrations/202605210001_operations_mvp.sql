@@ -376,8 +376,7 @@ create table public.attendance_entries (
   selfie_in_url text,
   selfie_out_url text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (user_id, work_date)
+  updated_at timestamptz not null default now()
 );
 
 create table public.attendance_adjustments (
@@ -398,6 +397,7 @@ create index pans_pan_id_idx on public.pans(pan_id);
 create index pans_location_status_idx on public.pans(current_location_id, status);
 create index dispatches_to_location_status_idx on public.dispatches(to_location_id, status);
 create index attendance_entries_work_date_idx on public.attendance_entries(work_date);
+create unique index attendance_entries_one_open_shift_idx on public.attendance_entries(user_id, work_date) where check_out_at is null;
 create index end_of_day_counts_location_date_idx on public.end_of_day_counts(location_id, business_date);
 
 create or replace function public.current_app_user_id()

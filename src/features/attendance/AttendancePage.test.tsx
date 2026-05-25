@@ -16,7 +16,7 @@ describe("AttendancePage", () => {
     resetDemoStoreData();
   });
 
-  it("lets staff check in and check out once per day", async () => {
+  it("lets staff check in and check out multiple shifts in one day", async () => {
     const user = userEvent.setup();
 
     renderApp(<App initialRole="store_staff" />);
@@ -32,6 +32,13 @@ describe("AttendancePage", () => {
     await user.click(screen.getByRole("button", { name: "Check out" }));
     expect(await screen.findByText("Checked out")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check out" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Check in" })).toBeEnabled();
+    expect(screen.getByLabelText("Today's shifts")).toHaveTextContent("Shift 1");
+
+    await user.click(screen.getByRole("button", { name: "Check in" }));
+    expect(await screen.findByText("Checked in")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check in" })).toBeDisabled();
+    expect(screen.getByLabelText("Today's shifts")).toHaveTextContent("Shift 2");
   });
 
   it("shows today's attendance roster to Admin", async () => {

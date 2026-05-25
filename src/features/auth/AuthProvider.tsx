@@ -7,7 +7,7 @@ import {
   loginWithPhone,
   signOutStaff,
 } from "../admin/staff/staffApi";
-import { getTodayAttendance } from "../attendance/attendanceApi";
+import { getActiveAttendance } from "../attendance/attendanceApi";
 
 interface AuthContextValue {
   profile: StaffProfile | null;
@@ -77,7 +77,7 @@ export function AuthProvider({ initialRole = null, children }: AuthProviderProps
 
     setActiveAttendanceLoading(true);
     try {
-      const entry = await getTodayAttendance(profile.id);
+      const entry = await getActiveAttendance(profile.id);
       setActiveAttendance(entry);
       return entry;
     } finally {
@@ -97,7 +97,7 @@ export function AuthProvider({ initialRole = null, children }: AuthProviderProps
 
       setActiveAttendanceLoading(true);
       try {
-        const entry = await getTodayAttendance(profile.id);
+        const entry = await getActiveAttendance(profile.id);
         if (mounted) {
           setActiveAttendance(entry);
         }

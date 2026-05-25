@@ -3,12 +3,13 @@ import { isCheckedOut, type AttendanceEntry } from "../../domain/attendance";
 import type { LocationOption, StaffProfile } from "../../domain/roles";
 import { isLabRole, isStoreRole, ROLE_LABELS } from "../../domain/roles";
 import { useAuth } from "../auth/AuthProvider";
-import { checkIn, checkOut, getTodayAttendance, listAttendanceForDate } from "./attendanceApi";
+import { checkIn, checkOut, getActiveAttendance, listAttendanceForDate, listTodayAttendanceForUser } from "./attendanceApi";
 import { listLocations, listStaff } from "../admin/staff/staffApi";
 
 export function AttendancePage() {
   const { profile, refreshActiveAttendance } = useAuth();
-  const [todayEntry, setTodayEntry] = useState<AttendanceEntry | null>(null);
+  const [activeEntry, setActiveEntry] = useState<AttendanceEntry | null>(null);
+  const [todayEntries, setTodayEntries] = useState<AttendanceEntry[]>([]);
   const [roster, setRoster] = useState<AttendanceEntry[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
@@ -34,6 +35,9 @@ export function AttendancePage() {
     }
     return locations;
   }, [locations, profile]);
+  const latestEntry = todayEntries.at(-1) ?? null;
+  const statusEntry = activeEntry ?? latestEntry;
+  const todayHours = todayEntries.reduce((total, entry) => total + (entry.hours ?? 0), 0);
 
   useEffect(() => {
     let active = true;
@@ -45,19 +49,21 @@ export function AttendancePage() {
 
       setLoading(true);
       try {
-        const [entry, rosterRows, staffRows, locationRows] = await Promise.all([
-          getTodayAttendance(profile.id),
+        const [entry, entryRows, rosterRows, staffRows, locationRows] = await Promise.all([
+          getActiveAttendance(profile.id),
+          listTodayAttendanceForUser(profile.id),
           profile.role === "admin" ? listAttendanceForDate() : Promise.resolve([]),
           profile.role === "admin" ? listStaff() : Promise.resolve([]),
           listLocations(),
         ]);
 
         if (active) {
-          setTodayEntry(entry);
+          setActiveEntry(entry);
+          setTodayEntries(entryRows);
           setRoster(rosterRows);
           setStaff(staffRows);
           setLocations(locationRows);
-          setSelectedLocationId(entry?.locationId ?? profile.defaultLocationId ?? "");
+          setSelectedLocationId(entry?.locationId ?? entryRows.at(-1)?.locationId ?? profile.defaultLocationId ?? "");
           setError(null);
         }
       } catch (loadError) {
@@ -79,8 +85,8 @@ export function AttendancePage() {
   }, [profile]);
 
   useEffect(() => {
-    if (todayEntry?.locationId) {
-      setSelectedLocationId(todayEntry.locationId);
+    if (activeEntry?.locationId) {
+      setSelectedLocationId(activeEntry.locationId);
       return;
     }
 
@@ -93,7 +99,7 @@ export function AttendancePage() {
         workLocationOptions[0]?.id ??
         "",
     );
-  }, [profile?.defaultLocationId, selectedLocationId, todayEntry, workLocationOptions]);
+  }, [activeEntry, profile?.defaultLocationId, selectedLocationId, workLocationOptions]);
 
   async function handleCheckIn() {
     if (!profile) {
@@ -102,7 +108,8 @@ export function AttendancePage() {
 
     try {
       const entry = await checkIn(profile, selectedLocationId);
-      setTodayEntry(entry);
+      setActiveEntry(entry);
+      setTodayEntries((current) => [...current, entry]);
       setError(null);
       await refreshActiveAttendance();
     } catch (checkInError) {
@@ -111,13 +118,14 @@ export function AttendancePage() {
   }
 
   async function handleCheckOut() {
-    if (!todayEntry) {
+    if (!activeEntry) {
       return;
     }
 
     try {
-      const entry = await checkOut(todayEntry);
-      setTodayEntry(entry);
+      const entry = await checkOut(activeEntry);
+      setActiveEntry(null);
+      setTodayEntries((current) => current.map((item) => item.id === entry.id ? entry : item));
       setError(null);
       await refreshActiveAttendance();
     } catch (checkOutError) {
@@ -139,23 +147,23 @@ export function AttendancePage() {
         <div className="attendance-state">
           <div>
             <span className="label">Status</span>
-            <strong>{todayEntry ? (isCheckedOut(todayEntry) ? "Checked out" : "Checked in") : "Not checked in"}</strong>
+            <strong>{activeEntry ? "Checked in" : latestEntry ? "Checked out" : "Not checked in"}</strong>
           </div>
-          {todayEntry?.locationId ? (
+          {statusEntry?.locationId ? (
             <div>
               <span className="label">Location</span>
-              <strong>{locationById.get(todayEntry.locationId)?.name ?? todayEntry.locationId}</strong>
+              <strong>{locationById.get(statusEntry.locationId)?.name ?? statusEntry.locationId}</strong>
             </div>
           ) : null}
-          {todayEntry?.hours ? (
+          {todayHours > 0 ? (
             <div>
               <span className="label">Hours</span>
-              <strong>{todayEntry.hours}</strong>
+              <strong>{Number(todayHours.toFixed(1))}</strong>
             </div>
           ) : null}
         </div>
 
-        {!todayEntry ? (
+        {!activeEntry ? (
           <label className="field">
             <span>{profile && isStoreRole(profile.role) ? "Work store" : "Work location"}</span>
             <select
@@ -178,7 +186,7 @@ export function AttendancePage() {
             className="primary-button"
             type="button"
             onClick={handleCheckIn}
-            disabled={Boolean(todayEntry) || !selectedLocationId}
+            disabled={Boolean(activeEntry) || !selectedLocationId}
           >
             Check in
           </button>
@@ -186,12 +194,33 @@ export function AttendancePage() {
             className="secondary-button"
             type="button"
             onClick={handleCheckOut}
-            disabled={!todayEntry || isCheckedOut(todayEntry)}
+            disabled={!activeEntry || isCheckedOut(activeEntry)}
           >
             Check out
           </button>
         </div>
       </section>
+
+      {todayEntries.length > 0 ? (
+        <section className="card">
+          <div className="card-title">Today&apos;s shifts</div>
+          <div className="list-stack" aria-label="Today's shifts">
+            {todayEntries.map((entry, index) => (
+              <div className="list-row" key={entry.id}>
+                <div>
+                  <strong>Shift {index + 1}</strong>
+                  <span>
+                    {formatTime(entry.checkInAt)}
+                    {entry.checkOutAt ? ` - ${formatTime(entry.checkOutAt)}` : " - in progress"}
+                    {entry.locationId ? ` / ${locationById.get(entry.locationId)?.name ?? entry.locationId}` : ""}
+                  </span>
+                </div>
+                <span className="badge">{entry.checkOutAt ? `${entry.hours ?? 0}h` : "In"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {profile.role === "admin" ? (
         <section className="card">
@@ -221,4 +250,8 @@ export function AttendancePage() {
       ) : null}
     </div>
   );
+}
+
+function formatTime(value: string): string {
+  return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
