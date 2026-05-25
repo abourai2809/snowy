@@ -2,6 +2,7 @@ import type { Dispatch } from "../../domain/dispatches";
 import type { EodCount, EodCountItem, DisplayMovement, FillState, StoreReceipt } from "../../domain/inventory";
 import type { Pan } from "../../domain/pans";
 import { isStoreRole, type AppRole } from "../../domain/roles";
+import { validateGelatoPanWeightKg } from "../../domain/weights";
 import { isSupabaseConfigured, requireSupabaseClient } from "../../lib/supabase";
 import {
   listAllPans,
@@ -374,6 +375,13 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
     throw new Error("Partial pans require a weight.");
   }
 
+  if (input.fillState === "partial") {
+    const partialWeightError = validateGelatoPanWeightKg(input.weightKg!, { fieldName: "Partial pan weight" });
+    if (partialWeightError) {
+      throw new Error(partialWeightError);
+    }
+  }
+
   const backupPans = await listBackupPans(input.storeLocationId);
   const pan = backupPans.find((item) => item.id === input.panUuid);
   if (!pan) {
@@ -383,6 +391,10 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
   const displayWeightKg = input.fillState === "full" ? pan.fullWeightKg ?? pan.currentWeightKg : input.weightKg;
   if (!displayWeightKg || displayWeightKg <= 0) {
     throw new Error("Display weight is required.");
+  }
+  const displayWeightError = validateGelatoPanWeightKg(displayWeightKg, { fieldName: "Display weight" });
+  if (displayWeightError) {
+    throw new Error(displayWeightError);
   }
 
   const movement = await createDisplayMovement({ ...input, weightKg: displayWeightKg });
@@ -396,6 +408,13 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
 
 export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCountWithItems> {
   assertStoreLocation(input, input.locationId);
+
+  const weightError = input.items
+    .map((item) => validateGelatoPanWeightKg(item.weightKg, { fieldName: "EOD gelato weight", allowZero: true }))
+    .find(Boolean);
+  if (weightError) {
+    throw new Error(weightError);
+  }
 
   const displayPans = await listDisplayPans(input.locationId);
   const displayPanById = new Map(displayPans.map((pan) => [pan.id, pan]));
@@ -512,8 +531,12 @@ export async function getEodCount(locationId: string, businessDate: string): Pro
 }
 
 export async function correctEodGelatoCountItem(input: EodGelatoCorrectionInput): Promise<EodCountWithItems> {
-  if (!Number.isFinite(input.weightKg) || input.weightKg < 0) {
-    throw new Error("Corrected gelato weight must be zero or more.");
+  const weightError = validateGelatoPanWeightKg(input.weightKg, {
+    fieldName: "Corrected gelato weight",
+    allowZero: true,
+  });
+  if (weightError) {
+    throw new Error(weightError);
   }
 
   const count = await findEodCountById(input.countId);

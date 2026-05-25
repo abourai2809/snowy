@@ -66,7 +66,7 @@ export function DisplayMovementForm({
             <option value="">Select backup pan</option>
             {backupPans.map((pan) => (
               <option value={pan.id} key={pan.id}>
-                {pan.panId} - {flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"}
+                {flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"} - {pan.panId}
               </option>
             ))}
           </select>

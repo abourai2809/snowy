@@ -126,8 +126,8 @@ function PanRows({ pans, flavours }: { pans: Pan[]; flavours: Flavour[] }) {
       {pans.map((pan) => (
         <article className="list-row" key={pan.id}>
           <div>
-            <strong>{pan.panId}</strong>
-            <span>{flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"}</span>
+            <strong>{flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"}</strong>
+            <span>{pan.panId}</span>
           </div>
           <span className="badge">{pan.currentWeightKg ?? "-"} kg</span>
         </article>

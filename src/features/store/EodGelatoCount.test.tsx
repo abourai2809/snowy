@@ -92,6 +92,31 @@ describe("store EOD gelato counts", () => {
     expect(count.items[0].weightKg).toBe(1.15);
   });
 
+  it("flags gram-style EOD weights", async () => {
+    const [displayPanUuid] = await seedStorePans(1);
+    await movePanToDisplay({
+      panUuid: displayPanUuid,
+      storeLocationId: "malsi",
+      fillState: "partial",
+      weightKg: 1.2,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    await expect(
+      submitEodGelatoCount({
+        locationId: "malsi",
+        businessDate: todayDate(),
+        notes: null,
+        actorId: "staff-store",
+        actorRole: "store_staff",
+        actorLocationId: "malsi",
+        items: [{ panUuid: displayPanUuid, weightKg: 6000 }],
+      }),
+    ).rejects.toThrow("EOD gelato weight looks too high. Enter kilograms, not grams. Use 6 instead of 6000.");
+  });
+
   it("lets Store Manager correct same-day counts", async () => {
     const [displayPanUuid] = await seedStorePans(1);
     await movePanToDisplay({

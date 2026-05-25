@@ -46,6 +46,22 @@ describe("store display movement", () => {
     expect(display[0].currentWeightKg).toBe(1.25);
     expect(display[0].panRole).toBe("display");
   });
+
+  it("flags gram-style weights before moving a pan to display", async () => {
+    const panUuid = await seedAcceptedStorePan();
+
+    await expect(
+      movePanToDisplay({
+        panUuid,
+        storeLocationId: "malsi",
+        fillState: "partial",
+        weightKg: 6000,
+        actorId: "staff-store",
+        actorRole: "store_staff",
+        actorLocationId: "malsi",
+      }),
+    ).rejects.toThrow("Partial pan weight looks too high. Enter kilograms, not grams. Use 6 instead of 6000.");
+  });
 });
 
 async function seedAcceptedStorePan() {

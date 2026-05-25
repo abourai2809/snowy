@@ -34,4 +34,20 @@ describe("ProductionForm", () => {
     expect(within(panList).getByText("PIS-20260523-02")).toBeInTheDocument();
     expect(within(panList).getByText("PIS-20260523-03")).toBeInTheDocument();
   });
+
+  it("flags gram-style full pan weights", async () => {
+    const user = userEvent.setup();
+
+    renderApp(<App initialRole="lab_staff" />);
+    await user.click(screen.getByRole("button", { name: "Lab" }));
+
+    await screen.findByLabelText("Production flavour");
+    await user.clear(screen.getByLabelText("Full pan weight kg"));
+    await user.type(screen.getByLabelText("Full pan weight kg"), "6000");
+    await user.click(screen.getByRole("button", { name: "Save production" }));
+
+    expect(
+      await screen.findByText("Full pan weight looks too high. Enter kilograms, not grams. Use 6 instead of 6000."),
+    ).toBeInTheDocument();
+  });
 });

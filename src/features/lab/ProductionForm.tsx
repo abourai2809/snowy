@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { Flavour } from "../../domain/flavours";
 import type { StaffProfile } from "../../domain/roles";
+import { validateGelatoPanWeightKg } from "../../domain/weights";
 import { createProduction } from "./labApi";
 
 interface ProductionFormProps {
@@ -31,6 +32,13 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
     event.preventDefault();
     if (!selectedFlavour) {
       setError("Add an active flavour before recording production.");
+      return;
+    }
+
+    const weightError = validateGelatoPanWeightKg(fullWeightKg, { fieldName: "Full pan weight" });
+    if (weightError) {
+      setError(weightError);
+      setMessage(null);
       return;
     }
 

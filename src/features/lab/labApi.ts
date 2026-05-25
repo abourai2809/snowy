@@ -2,6 +2,7 @@ import { isSupabaseConfigured, requireSupabaseClient } from "../../lib/supabase"
 import type { Dispatch, DispatchItem, DispatchStatus } from "../../domain/dispatches";
 import { buildPanId, type GelatoBatch, type Pan } from "../../domain/pans";
 import type { Flavour } from "../../domain/flavours";
+import { validateGelatoPanWeightKg } from "../../domain/weights";
 
 export interface ProductionInput {
   flavour: Flavour;
@@ -114,6 +115,11 @@ function createBatchCode(shortCode: string, productionDate: string): string {
 export async function createProduction(input: ProductionInput): Promise<ProductionResult> {
   if (input.panCount < 1) {
     throw new Error("Pan count must be at least 1.");
+  }
+
+  const weightError = validateGelatoPanWeightKg(input.fullWeightKg, { fieldName: "Full pan weight" });
+  if (weightError) {
+    throw new Error(weightError);
   }
 
   if (!isSupabaseConfigured) {
