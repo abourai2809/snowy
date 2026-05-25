@@ -15,6 +15,11 @@ export interface LocationOption {
   name: string;
   type: "lab" | "store";
   active: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  attendanceRadiusM: number;
+  attendanceAccuracyLimitM: number;
+  posAlias?: string | null;
 }
 
 export interface StaffProfile {

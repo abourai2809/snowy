@@ -1,5 +1,11 @@
 import { isSupabaseConfigured, requireSupabaseClient } from "../../lib/supabase";
-import { calculateHours, getTodayKey, isCheckedOut, type AttendanceEntry } from "../../domain/attendance";
+import {
+  calculateHours,
+  getTodayKey,
+  isCheckedOut,
+  type AttendanceEntry,
+  type AttendanceLocationEvidence,
+} from "../../domain/attendance";
 import type { StaffProfile } from "../../domain/roles";
 
 let demoAttendance: AttendanceEntry[] = [];
@@ -14,6 +20,48 @@ function mapAttendanceRow(row: Record<string, unknown>): AttendanceEntry {
     checkOutAt: row.check_out_at ? String(row.check_out_at) : null,
     hours: row.hours === null || row.hours === undefined ? null : Number(row.hours),
     status: row.status as AttendanceEntry["status"],
+    checkInLocation: mapLocationEvidence(row, "check_in"),
+    checkOutLocation: mapLocationEvidence(row, "check_out"),
+  };
+}
+
+function mapLocationEvidence(row: Record<string, unknown>, prefix: "check_in" | "check_out"): AttendanceLocationEvidence | null {
+  const status = row[`${prefix}_location_status`];
+  const latitude = row[`${prefix}_latitude`];
+  const longitude = row[`${prefix}_longitude`];
+  const accuracyM = row[`${prefix}_accuracy_m`];
+  const distanceM = row[`${prefix}_distance_m`];
+  const validationLocationId = row[`${prefix}_validation_location_id`];
+  const error = row[`${prefix}_location_error`];
+
+  if (!status && latitude === undefined && longitude === undefined && accuracyM === undefined && distanceM === undefined) {
+    return null;
+  }
+
+  return {
+    latitude: latitude === null || latitude === undefined ? null : Number(latitude),
+    longitude: longitude === null || longitude === undefined ? null : Number(longitude),
+    accuracyM: accuracyM === null || accuracyM === undefined ? null : Number(accuracyM),
+    distanceM: distanceM === null || distanceM === undefined ? null : Number(distanceM),
+    validationLocationId: validationLocationId ? String(validationLocationId) : null,
+    status: (status ?? "unknown_error") as AttendanceLocationEvidence["status"],
+    error: error ? String(error) : null,
+  };
+}
+
+function buildLocationColumns(prefix: "check_in" | "check_out", evidence?: AttendanceLocationEvidence | null) {
+  if (!evidence) {
+    return {};
+  }
+
+  return {
+    [`${prefix}_latitude`]: evidence.latitude,
+    [`${prefix}_longitude`]: evidence.longitude,
+    [`${prefix}_accuracy_m`]: evidence.accuracyM,
+    [`${prefix}_distance_m`]: evidence.distanceM,
+    [`${prefix}_validation_location_id`]: evidence.validationLocationId,
+    [`${prefix}_location_status`]: evidence.status,
+    [`${prefix}_location_error`]: evidence.error,
   };
 }
 
@@ -72,7 +120,12 @@ export async function listAttendanceForDate(date = getTodayKey()): Promise<Atten
   return data.map(mapAttendanceRow);
 }
 
-export async function checkIn(profile: StaffProfile, locationId: string | null, now = new Date()): Promise<AttendanceEntry> {
+export async function checkIn(
+  profile: StaffProfile,
+  locationId: string | null,
+  now = new Date(),
+  locationEvidence?: AttendanceLocationEvidence | null,
+): Promise<AttendanceEntry> {
   if (!locationId) {
     throw new Error("Work location is required.");
   }
@@ -94,6 +147,8 @@ export async function checkIn(profile: StaffProfile, locationId: string | null, 
       checkOutAt: null,
       hours: null,
       status: "active",
+      checkInLocation: locationEvidence ?? null,
+      checkOutLocation: null,
     };
     demoAttendance.push(created);
     return created;
@@ -107,6 +162,7 @@ export async function checkIn(profile: StaffProfile, locationId: string | null, 
       work_date: workDate,
       check_in_at: now.toISOString(),
       status: "active",
+      ...buildLocationColumns("check_in", locationEvidence),
     })
     .select()
     .single();
@@ -118,7 +174,11 @@ export async function checkIn(profile: StaffProfile, locationId: string | null, 
   return mapAttendanceRow(data);
 }
 
-export async function checkOut(entry: AttendanceEntry, now = new Date()): Promise<AttendanceEntry> {
+export async function checkOut(
+  entry: AttendanceEntry,
+  now = new Date(),
+  locationEvidence?: AttendanceLocationEvidence | null,
+): Promise<AttendanceEntry> {
   if (entry.checkOutAt) {
     throw new Error("Attendance is already checked out for today.");
   }
@@ -135,6 +195,7 @@ export async function checkOut(entry: AttendanceEntry, now = new Date()): Promis
     existing.checkOutAt = checkOutAt;
     existing.hours = hours;
     existing.status = "checked_out";
+    existing.checkOutLocation = locationEvidence ?? null;
     return { ...existing };
   }
 
@@ -144,6 +205,7 @@ export async function checkOut(entry: AttendanceEntry, now = new Date()): Promis
       check_out_at: checkOutAt,
       hours,
       status: "checked_out",
+      ...buildLocationColumns("check_out", locationEvidence),
     })
     .eq("id", entry.id)
     .select()

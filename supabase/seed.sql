@@ -6,15 +6,30 @@ insert into public.roles (id, label) values
   ('lab_staff', 'Lab Staff')
 on conflict (id) do update set label = excluded.label;
 
-insert into public.locations (id, name, type, capacity) values
-  ('lab', 'Lab / Kitchen', 'lab', null),
-  ('rajpur', 'Rajpur Road', 'store', 16),
-  ('malsi', 'Malsi', 'store', 9),
-  ('mussoorie', 'Mussoorie', 'store', 12)
+insert into public.locations (
+  id,
+  name,
+  type,
+  capacity,
+  latitude,
+  longitude,
+  attendance_radius_m,
+  attendance_accuracy_limit_m,
+  pos_alias
+) values
+  ('lab', 'Lab / Kitchen', 'lab', null, 30.2932355, 78.0603935, 150, 100, null),
+  ('rajpur', 'Rajpur Road', 'store', 16, 30.3423856, 78.0611274, 150, 100, null),
+  ('malsi', 'Malsi', 'store', 9, 30.3949920, 78.0748199, 150, 100, 'Snowy Owl Cottage'),
+  ('mussoorie', 'Mussoorie', 'store', 12, 30.4552185, 78.0811381, 150, 100, null)
 on conflict (id) do update
 set name = excluded.name,
     type = excluded.type,
     capacity = excluded.capacity,
+    latitude = excluded.latitude,
+    longitude = excluded.longitude,
+    attendance_radius_m = excluded.attendance_radius_m,
+    attendance_accuracy_limit_m = excluded.attendance_accuracy_limit_m,
+    pos_alias = excluded.pos_alias,
     active = true,
     updated_at = now();
 

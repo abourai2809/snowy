@@ -6,10 +6,47 @@ interface DemoStaffProfile extends StaffProfile {
 }
 
 const demoLocations: LocationOption[] = [
-  { id: "lab", name: "Lab / Kitchen", type: "lab", active: true },
-  { id: "rajpur", name: "Rajpur Road", type: "store", active: true },
-  { id: "malsi", name: "Malsi", type: "store", active: true },
-  { id: "mussoorie", name: "Mussoorie", type: "store", active: true },
+  {
+    id: "lab",
+    name: "Lab / Kitchen",
+    type: "lab",
+    active: true,
+    latitude: 30.2932355,
+    longitude: 78.0603935,
+    attendanceRadiusM: 150,
+    attendanceAccuracyLimitM: 100,
+  },
+  {
+    id: "rajpur",
+    name: "Rajpur Road",
+    type: "store",
+    active: true,
+    latitude: 30.3423856,
+    longitude: 78.0611274,
+    attendanceRadiusM: 150,
+    attendanceAccuracyLimitM: 100,
+  },
+  {
+    id: "malsi",
+    name: "Malsi",
+    type: "store",
+    active: true,
+    latitude: 30.394992,
+    longitude: 78.0748199,
+    attendanceRadiusM: 150,
+    attendanceAccuracyLimitM: 100,
+    posAlias: "Snowy Owl Cottage",
+  },
+  {
+    id: "mussoorie",
+    name: "Mussoorie",
+    type: "store",
+    active: true,
+    latitude: 30.4552185,
+    longitude: 78.0811381,
+    attendanceRadiusM: 150,
+    attendanceAccuracyLimitM: 100,
+  },
 ];
 
 const initialDemoStaff: DemoStaffProfile[] = [
@@ -232,7 +269,7 @@ export async function listLocations(): Promise<LocationOption[]> {
 
   const { data, error } = await requireSupabaseClient()
     .from("locations")
-    .select("id,name,type,active")
+    .select("*")
     .eq("active", true)
     .order("name");
 
@@ -245,6 +282,11 @@ export async function listLocations(): Promise<LocationOption[]> {
     name: location.name,
     type: location.type,
     active: location.active,
+    latitude: location.latitude === null || location.latitude === undefined ? null : Number(location.latitude),
+    longitude: location.longitude === null || location.longitude === undefined ? null : Number(location.longitude),
+    attendanceRadiusM: Number(location.attendance_radius_m ?? 150),
+    attendanceAccuracyLimitM: Number(location.attendance_accuracy_limit_m ?? 100),
+    posAlias: location.pos_alias ? String(location.pos_alias) : null,
   }));
 }
 

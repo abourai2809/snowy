@@ -117,9 +117,20 @@ create table public.locations (
   name text not null,
   type public.location_type not null,
   capacity integer,
+  latitude numeric(10,7),
+  longitude numeric(10,7),
+  attendance_radius_m integer not null default 150,
+  attendance_accuracy_limit_m integer not null default 100,
+  pos_alias text,
   active boolean not null default true,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint locations_attendance_radius_positive check (attendance_radius_m > 0),
+  constraint locations_attendance_accuracy_positive check (attendance_accuracy_limit_m > 0),
+  constraint locations_coordinates_pair check (
+    (latitude is null and longitude is null)
+    or (latitude is not null and longitude is not null)
+  )
 );
 
 create table public.users (
@@ -373,10 +384,52 @@ create table public.attendance_entries (
   check_out_at timestamptz,
   hours numeric(6,2),
   status public.attendance_status not null default 'active',
+  check_in_latitude numeric(10,7),
+  check_in_longitude numeric(10,7),
+  check_in_accuracy_m numeric(8,2),
+  check_in_distance_m numeric(8,2),
+  check_in_validation_location_id text references public.locations(id),
+  check_in_location_status text,
+  check_in_location_error text,
+  check_out_latitude numeric(10,7),
+  check_out_longitude numeric(10,7),
+  check_out_accuracy_m numeric(8,2),
+  check_out_distance_m numeric(8,2),
+  check_out_validation_location_id text references public.locations(id),
+  check_out_location_status text,
+  check_out_location_error text,
   selfie_in_url text,
   selfie_out_url text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint attendance_check_in_location_status_known check (
+    check_in_location_status is null
+    or check_in_location_status in (
+      'verified',
+      'denied',
+      'unavailable',
+      'timeout',
+      'unsupported',
+      'poor_accuracy',
+      'outside_radius',
+      'not_configured',
+      'unknown_error'
+    )
+  ),
+  constraint attendance_check_out_location_status_known check (
+    check_out_location_status is null
+    or check_out_location_status in (
+      'verified',
+      'denied',
+      'unavailable',
+      'timeout',
+      'unsupported',
+      'poor_accuracy',
+      'outside_radius',
+      'not_configured',
+      'unknown_error'
+    )
+  )
 );
 
 create table public.attendance_adjustments (

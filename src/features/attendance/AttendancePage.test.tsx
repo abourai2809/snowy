@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderApp, screen, userEvent, waitFor } from "../../test/render";
 import { App } from "../../app/App";
 import { resetDemoStaffData } from "../admin/staff/staffApi";
@@ -14,6 +14,7 @@ describe("AttendancePage", () => {
     resetDemoCatalogData();
     resetDemoLabData();
     resetDemoStoreData();
+    mockDeviceLocation(MALSI_LOCATION);
   });
 
   it("lets staff check in and check out multiple shifts in one day", async () => {
@@ -62,6 +63,7 @@ describe("AttendancePage", () => {
     renderApp(<App initialRole="store_staff" />);
     await user.click(screen.getByRole("button", { name: "Attendance" }));
     await user.selectOptions(await screen.findByLabelText("Work store"), "rajpur");
+    mockDeviceLocation(RAJPUR_LOCATION);
     await user.click(screen.getByRole("button", { name: "Check in" }));
 
     await waitFor(() => expect(screen.getByText("Checked in")).toBeInTheDocument());
@@ -80,7 +82,72 @@ describe("AttendancePage", () => {
 
     expect(await screen.findByText("Check in to select your store before using store workflows.")).toBeInTheDocument();
   });
+
+  it("shows a clear error when location permission is denied", async () => {
+    const user = userEvent.setup();
+    mockDeviceLocationError(deniedLocationError());
+
+    renderApp(<App initialRole="store_staff" />);
+    await user.click(screen.getByRole("button", { name: "Attendance" }));
+    await user.click(await screen.findByRole("button", { name: "Check in" }));
+
+    expect(await screen.findByText(/Location permission was denied/)).toBeInTheDocument();
+    expect(screen.getByText("Not checked in")).toBeInTheDocument();
+  });
 });
+
+const RAJPUR_LOCATION = {
+  latitude: 30.3423856,
+  longitude: 78.0611274,
+};
+
+const MALSI_LOCATION = {
+  latitude: 30.394992,
+  longitude: 78.0748199,
+};
+
+function mockDeviceLocation(location: { latitude: number; longitude: number }, accuracy = 20) {
+  Object.defineProperty(navigator, "geolocation", {
+    configurable: true,
+    value: {
+      getCurrentPosition: vi.fn((success: PositionCallback) => {
+        success({
+          coords: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy,
+            altitude: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null,
+          },
+          timestamp: Date.now(),
+        } as GeolocationPosition);
+      }),
+    },
+  });
+}
+
+function mockDeviceLocationError(error: GeolocationPositionError) {
+  Object.defineProperty(navigator, "geolocation", {
+    configurable: true,
+    value: {
+      getCurrentPosition: vi.fn((_success: PositionCallback, failure: PositionErrorCallback) => {
+        failure(error);
+      }),
+    },
+  });
+}
+
+function deniedLocationError(): GeolocationPositionError {
+  return {
+    code: 1,
+    message: "Permission denied",
+    PERMISSION_DENIED: 1,
+    POSITION_UNAVAILABLE: 2,
+    TIMEOUT: 3,
+  } as GeolocationPositionError;
+}
 
 async function seedIncomingRajpurPan() {
   const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PIS");

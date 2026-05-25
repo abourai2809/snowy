@@ -98,7 +98,7 @@ export function AdminReportsPage() {
           rows={attendance.map((entry) => ({
             id: entry.id,
             title: staffById.get(entry.userId)?.name ?? entry.userId,
-            detail: entry.locationId ?? "No location",
+            detail: formatAttendanceDetail(entry),
             badge: entry.status,
           }))}
         />
@@ -109,6 +109,19 @@ export function AdminReportsPage() {
       <CorrectionsPage />
     </div>
   );
+}
+
+function formatAttendanceDetail(entry: AttendanceEntry): string {
+  const location = entry.locationId ?? "No location";
+  const checkIn = entry.checkInLocation
+    ? `In ${entry.checkInLocation.distanceM ?? "n/a"}m / acc ${entry.checkInLocation.accuracyM ?? "n/a"}m`
+    : "In location not captured";
+  const checkOut = entry.checkOutLocation
+    ? `Out ${entry.checkOutLocation.distanceM ?? "n/a"}m / acc ${entry.checkOutLocation.accuracyM ?? "n/a"}m`
+    : entry.checkOutAt
+      ? "Out location not captured"
+      : "Still checked in";
+  return `${location} - ${checkIn} - ${checkOut}`;
 }
 
 function ReportRows({ rows }: { rows: Array<{ id: string; title: string; detail: string; badge: string }> }) {

@@ -4,6 +4,7 @@ import type { LocationOption, StaffProfile } from "../../domain/roles";
 import { isLabRole, isStoreRole, ROLE_LABELS } from "../../domain/roles";
 import { useAuth } from "../auth/AuthProvider";
 import { checkIn, checkOut, getActiveAttendance, listAttendanceForDate, listTodayAttendanceForUser } from "./attendanceApi";
+import { collectVerifiedAttendanceLocation } from "./locationEvidence";
 import { listLocations, listStaff } from "../admin/staff/staffApi";
 
 export function AttendancePage() {
@@ -16,6 +17,7 @@ export function AttendancePage() {
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [submittingAction, setSubmittingAction] = useState<"check-in" | "check-out" | null>(null);
 
   const staffById = useMemo(
     () => new Map(staff.map((member) => [member.id, member])),
@@ -38,6 +40,7 @@ export function AttendancePage() {
   const latestEntry = todayEntries.at(-1) ?? null;
   const statusEntry = activeEntry ?? latestEntry;
   const todayHours = todayEntries.reduce((total, entry) => total + (entry.hours ?? 0), 0);
+  const selectedLocation = selectedLocationId ? locationById.get(selectedLocationId) ?? null : null;
 
   useEffect(() => {
     let active = true;
@@ -107,13 +110,21 @@ export function AttendancePage() {
     }
 
     try {
-      const entry = await checkIn(profile, selectedLocationId);
+      if (!selectedLocation) {
+        throw new Error("Work location is required.");
+      }
+
+      setSubmittingAction("check-in");
+      const locationEvidence = await collectVerifiedAttendanceLocation(selectedLocation);
+      const entry = await checkIn(profile, selectedLocationId, new Date(), locationEvidence);
       setActiveEntry(entry);
       setTodayEntries((current) => [...current, entry]);
       setError(null);
       await refreshActiveAttendance();
     } catch (checkInError) {
       setError(checkInError instanceof Error ? checkInError.message : "Unable to check in.");
+    } finally {
+      setSubmittingAction(null);
     }
   }
 
@@ -123,13 +134,22 @@ export function AttendancePage() {
     }
 
     try {
-      const entry = await checkOut(activeEntry);
+      const activeLocation = activeEntry.locationId ? locationById.get(activeEntry.locationId) ?? null : null;
+      if (!activeLocation) {
+        throw new Error("Checked-in location could not be found.");
+      }
+
+      setSubmittingAction("check-out");
+      const locationEvidence = await collectVerifiedAttendanceLocation(activeLocation);
+      const entry = await checkOut(activeEntry, new Date(), locationEvidence);
       setActiveEntry(null);
       setTodayEntries((current) => current.map((item) => item.id === entry.id ? entry : item));
       setError(null);
       await refreshActiveAttendance();
     } catch (checkOutError) {
       setError(checkOutError instanceof Error ? checkOutError.message : "Unable to check out.");
+    } finally {
+      setSubmittingAction(null);
     }
   }
 
@@ -143,6 +163,11 @@ export function AttendancePage() {
         <div className="card-title">Today</div>
         {loading ? <p className="muted-copy">Loading attendance...</p> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
+        {submittingAction ? (
+          <p className="muted-copy">
+            Checking location before {submittingAction === "check-in" ? "check in" : "check out"}...
+          </p>
+        ) : null}
 
         <div className="attendance-state">
           <div>
@@ -186,17 +211,17 @@ export function AttendancePage() {
             className="primary-button"
             type="button"
             onClick={handleCheckIn}
-            disabled={Boolean(activeEntry) || !selectedLocationId}
+            disabled={Boolean(activeEntry) || !selectedLocationId || Boolean(submittingAction)}
           >
-            Check in
+            {submittingAction === "check-in" ? "Checking..." : "Check in"}
           </button>
           <button
             className="secondary-button"
             type="button"
             onClick={handleCheckOut}
-            disabled={!activeEntry || isCheckedOut(activeEntry)}
+            disabled={!activeEntry || isCheckedOut(activeEntry) || Boolean(submittingAction)}
           >
-            Check out
+            {submittingAction === "check-out" ? "Checking..." : "Check out"}
           </button>
         </div>
       </section>
@@ -214,6 +239,12 @@ export function AttendancePage() {
                     {entry.checkOutAt ? ` - ${formatTime(entry.checkOutAt)}` : " - in progress"}
                     {entry.locationId ? ` / ${locationById.get(entry.locationId)?.name ?? entry.locationId}` : ""}
                   </span>
+                  {entry.checkInLocation ? (
+                    <span>{formatLocationEvidence("In", entry.checkInLocation.distanceM, entry.checkInLocation.accuracyM)}</span>
+                  ) : null}
+                  {entry.checkOutLocation ? (
+                    <span>{formatLocationEvidence("Out", entry.checkOutLocation.distanceM, entry.checkOutLocation.accuracyM)}</span>
+                  ) : null}
                 </div>
                 <span className="badge">{entry.checkOutAt ? `${entry.hours ?? 0}h` : "In"}</span>
               </div>
@@ -239,6 +270,12 @@ export function AttendancePage() {
                         {member ? ROLE_LABELS[member.role] : entry.userId}
                         {entry.locationId ? ` / ${locationById.get(entry.locationId)?.name ?? entry.locationId}` : ""}
                       </span>
+                      {entry.checkInLocation ? (
+                        <span>{formatLocationEvidence("In", entry.checkInLocation.distanceM, entry.checkInLocation.accuracyM)}</span>
+                      ) : null}
+                      {entry.checkOutLocation ? (
+                        <span>{formatLocationEvidence("Out", entry.checkOutLocation.distanceM, entry.checkOutLocation.accuracyM)}</span>
+                      ) : null}
                     </div>
                     <span className="badge">{entry.checkOutAt ? "Out" : "In"}</span>
                   </div>
@@ -254,4 +291,10 @@ export function AttendancePage() {
 
 function formatTime(value: string): string {
   return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatLocationEvidence(label: string, distanceM: number | null, accuracyM: number | null): string {
+  const distance = distanceM === null ? "distance n/a" : `${Math.round(distanceM)}m away`;
+  const accuracy = accuracyM === null ? "accuracy n/a" : `accuracy ${Math.round(accuracyM)}m`;
+  return `${label} location: ${distance}, ${accuracy}`;
 }
