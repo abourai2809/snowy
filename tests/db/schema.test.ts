@@ -36,6 +36,8 @@ const expectedTables = [
   "inventory_adjustments",
   "attendance_entries",
   "attendance_adjustments",
+  "urgent_requirements",
+  "urgent_requirement_events",
 ];
 
 const expectedEnums = [

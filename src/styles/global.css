@@ -756,6 +756,10 @@ button {
   text-decoration: none;
 }
 
+.urgent-card {
+  border-color: var(--pk);
+}
+
 .eod-weight-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 92px;

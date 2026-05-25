@@ -390,6 +390,36 @@ create table public.attendance_adjustments (
   adjusted_at timestamptz not null default now()
 );
 
+create table public.urgent_requirements (
+  id uuid primary key default gen_random_uuid(),
+  source_location_id text not null references public.locations(id),
+  requirement_type text not null check (requirement_type in ('gelato','store_supply','packaging','maintenance','other')),
+  related_flavour_id uuid references public.flavours(id),
+  related_catalog_item_id uuid references public.catalog_items(id),
+  quantity numeric(10,2),
+  unit text,
+  priority text not null default 'urgent' check (priority in ('urgent','high','normal')),
+  message text not null,
+  status text not null default 'submitted' check (status in ('submitted','acknowledged','in_progress','fulfilled','cancelled')),
+  created_by uuid references public.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  acknowledged_by uuid references public.users(id),
+  acknowledged_at timestamptz,
+  fulfilled_by uuid references public.users(id),
+  fulfilled_at timestamptz
+);
+
+create table public.urgent_requirement_events (
+  id uuid primary key default gen_random_uuid(),
+  urgent_requirement_id uuid not null references public.urgent_requirements(id) on delete cascade,
+  event_type text not null,
+  status text not null,
+  message text,
+  actor_id uuid references public.users(id),
+  created_at timestamptz not null default now()
+);
+
 create index users_auth_user_id_idx on public.users(auth_user_id);
 create index users_role_idx on public.users(role);
 create index catalog_items_scope_idx on public.catalog_items(scope);
@@ -399,6 +429,9 @@ create index dispatches_to_location_status_idx on public.dispatches(to_location_
 create index attendance_entries_work_date_idx on public.attendance_entries(work_date);
 create unique index attendance_entries_one_open_shift_idx on public.attendance_entries(user_id, work_date) where check_out_at is null;
 create index end_of_day_counts_location_date_idx on public.end_of_day_counts(location_id, business_date);
+create index urgent_requirements_status_idx on public.urgent_requirements(status, created_at desc);
+create index urgent_requirements_source_location_idx on public.urgent_requirements(source_location_id);
+create index urgent_requirement_events_requirement_idx on public.urgent_requirement_events(urgent_requirement_id, created_at);
 
 create or replace function public.current_app_user_id()
 returns uuid
@@ -472,6 +505,8 @@ alter table public.end_of_day_count_items enable row level security;
 alter table public.inventory_adjustments enable row level security;
 alter table public.attendance_entries enable row level security;
 alter table public.attendance_adjustments enable row level security;
+alter table public.urgent_requirements enable row level security;
+alter table public.urgent_requirement_events enable row level security;
 
 create policy "roles readable by authenticated users"
 on public.roles for select to authenticated using (true);
@@ -683,6 +718,27 @@ using (
 create policy "attendance adjustments managed by admin"
 on public.attendance_adjustments for all to authenticated
 using (public.is_admin()) with check (public.is_admin());
+
+create policy "urgent requirements readable by staff"
+on public.urgent_requirements for select to authenticated
+using (public.current_app_role() is not null);
+
+create policy "urgent requirements created by store roles and admin"
+on public.urgent_requirements for insert to authenticated
+with check (public.has_app_role(array['admin','store_manager','store_staff']::public.app_role[]));
+
+create policy "urgent requirements updated by managers"
+on public.urgent_requirements for update to authenticated
+using (public.has_app_role(array['admin','store_manager','lab_manager']::public.app_role[]))
+with check (public.has_app_role(array['admin','store_manager','lab_manager']::public.app_role[]));
+
+create policy "urgent requirement events readable by staff"
+on public.urgent_requirement_events for select to authenticated
+using (public.current_app_role() is not null);
+
+create policy "urgent requirement events writable by staff"
+on public.urgent_requirement_events for insert to authenticated
+with check (public.current_app_role() is not null);
 
 grant usage on schema public to authenticated;
 grant usage on schema public to service_role;

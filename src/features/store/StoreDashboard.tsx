@@ -5,6 +5,8 @@ import { isStoreRole } from "../../domain/roles";
 import { useAuth } from "../auth/AuthProvider";
 import { listFlavours } from "../catalog/catalogApi";
 import { InventoryCountPage } from "../inventory/InventoryCountPage";
+import { UrgentRequirementForm } from "../urgentRequirements/UrgentRequirementForm";
+import { UrgentRequirementsPanel } from "../urgentRequirements/UrgentRequirementsPanel";
 import { IncomingDispatches } from "./IncomingDispatches";
 import { DisplayMovementForm } from "./DisplayMovementForm";
 import { DeepFreezerCountForm } from "./DeepFreezerCountForm";
@@ -22,6 +24,7 @@ export function StoreDashboard() {
   const [incoming, setIncoming] = useState<IncomingDispatch[]>([]);
   const [backupPans, setBackupPans] = useState<Pan[]>([]);
   const [displayPans, setDisplayPans] = useState<Pan[]>([]);
+  const [urgentRefreshKey, setUrgentRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const locationId = profile && isStoreRole(profile.role) ? activeLocationId : profile?.defaultLocationId ?? null;
@@ -89,12 +92,20 @@ export function StoreDashboard() {
         <div className="card-title">Store actions</div>
         <div className="quick-action-grid">
           <a className="quick-action" href="#incoming-pans">Incoming pans</a>
+          <a className="quick-action" href="#urgent-requirement">Urgent need</a>
           <a className="quick-action" href="#move-to-display">Move to display</a>
           <a className="quick-action" href="#deep-freezer-weights">Deep freezer count</a>
           <a className="quick-action" href="#eod-gelato-weights">EOD gelato weights</a>
           <a className="quick-action" href="#store-supply-checklist">Supply count</a>
         </div>
       </section>
+      <UrgentRequirementsPanel key={urgentRefreshKey} profile={profile} locationId={locationId} />
+      <UrgentRequirementForm
+        {...actor}
+        locationId={locationId}
+        flavours={flavours}
+        onCreated={() => setUrgentRefreshKey((current) => current + 1)}
+      />
       <div id="incoming-pans">
       <IncomingDispatches
         {...actor}
