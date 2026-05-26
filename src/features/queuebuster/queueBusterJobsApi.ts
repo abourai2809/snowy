@@ -110,6 +110,17 @@ function appendDemoEvent(
   });
 }
 
+function assertAuditSucceeded(job: QueueBusterJob, jobs: QueueBusterJob[]) {
+  if (!requiresQueueBusterAudit(job.jobType)) {
+    return;
+  }
+
+  const audit = jobs.find((item) => item.id === job.auditJobId);
+  if (!audit || audit.jobType !== "audit_flavour" || audit.status !== "succeeded") {
+    throw new Error("Linked audit job must succeed before this QueueBuster job can be confirmed.");
+  }
+}
+
 async function createQueueBusterJobEvent(
   jobId: string,
   eventType: string,
@@ -239,6 +250,7 @@ export async function confirmQueueBusterJob(
     if (job.status !== "needs_confirmation") {
       throw new Error("Only jobs waiting for confirmation can be confirmed.");
     }
+    assertAuditSucceeded(job, demoJobs);
 
     job.status = "pending";
     job.confirmedBy = actorId;
@@ -246,6 +258,30 @@ export async function confirmQueueBusterJob(
     job.updatedAt = timestamp;
     appendDemoEvent(job, "confirmed", actorId, "Approved for worker execution.");
     return { ...job };
+  }
+
+  const { data: currentData, error: currentError } = await requireSupabaseClient()
+    .from("queuebuster_jobs")
+    .select("*")
+    .eq("id", jobId)
+    .single();
+
+  if (currentError) throw currentError;
+  const currentJob = mapJob(currentData);
+
+  if (currentJob.status !== "needs_confirmation") {
+    throw new Error("Only jobs waiting for confirmation can be confirmed.");
+  }
+
+  if (requiresQueueBusterAudit(currentJob.jobType)) {
+    const { data: auditData, error: auditError } = await requireSupabaseClient()
+      .from("queuebuster_jobs")
+      .select("*")
+      .eq("id", currentJob.auditJobId)
+      .single();
+
+    if (auditError) throw auditError;
+    assertAuditSucceeded(currentJob, [mapJob(auditData)]);
   }
 
   const { data, error } = await requireSupabaseClient()

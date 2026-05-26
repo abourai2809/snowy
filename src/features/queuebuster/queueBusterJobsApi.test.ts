@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   claimNextQueueBusterJob,
+  completeQueueBusterJob,
   confirmQueueBusterJob,
   createQueueBusterJob,
   listQueueBusterJobEvents,
@@ -61,6 +62,9 @@ describe("queueBusterJobsApi", () => {
     });
 
     expect(add.status).toBe("needs_confirmation");
+    await expect(confirmQueueBusterJob(add.id, "staff-admin", "admin")).rejects.toThrow("Linked audit job must succeed");
+
+    await completeQueueBusterJob(audit.id, "succeeded", { matches: [] }, null);
 
     const confirmed = await confirmQueueBusterJob(add.id, "staff-admin", "admin");
     expect(confirmed.status).toBe("pending");

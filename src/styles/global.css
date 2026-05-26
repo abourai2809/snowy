@@ -402,7 +402,8 @@ button {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   min-height: 40px;
   width: 100%;
   border: 1px solid var(--line-strong);
@@ -414,9 +415,16 @@ button {
 }
 
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   border-color: var(--pk);
   box-shadow: 0 0 0 3px rgba(193, 123, 123, 0.14);
+}
+
+.field textarea {
+  min-height: 82px;
+  padding: 10px 12px;
+  resize: vertical;
 }
 
 .primary-button,

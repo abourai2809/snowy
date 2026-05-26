@@ -11,8 +11,9 @@ import { CatalogCategoryEditor } from "./CatalogCategoryEditor";
 import { CatalogItemEditor } from "./CatalogItemEditor";
 import { FlavourEditor } from "./FlavourEditor";
 import { ProductEditor } from "./ProductEditor";
+import { QueueBusterCommandCenter } from "../queuebuster/QueueBusterCommandCenter";
 
-type CatalogTab = "flavours" | "categories" | "items" | "products";
+type CatalogTab = "flavours" | "categories" | "items" | "products" | "queuebuster";
 
 export function CatalogPage() {
   const [activeTab, setActiveTab] = useState<CatalogTab>("flavours");
@@ -63,6 +64,9 @@ export function CatalogPage() {
         <button className={`tab ${activeTab === "products" ? "act" : ""}`} type="button" onClick={() => setActiveTab("products")}>
           Products
         </button>
+        <button className={`tab ${activeTab === "queuebuster" ? "act" : ""}`} type="button" onClick={() => setActiveTab("queuebuster")}>
+          QueueBuster
+        </button>
       </div>
 
       {loading ? <p className="muted-copy">Loading catalog...</p> : null}
@@ -76,6 +80,7 @@ export function CatalogPage() {
       {activeTab === "products" ? (
         <ProductEditor products={products} items={items} flavours={flavours} onChanged={refresh} />
       ) : null}
+      {activeTab === "queuebuster" ? <QueueBusterCommandCenter /> : null}
     </div>
   );
 }
