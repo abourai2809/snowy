@@ -1,3 +1,5 @@
+create extension if not exists pgcrypto;
+
 do $$
 begin
   create type public.queuebuster_job_type as enum (
@@ -48,6 +50,54 @@ create table if not exists public.queuebuster_jobs (
   updated_at timestamptz not null default now()
 );
 
+alter table public.queuebuster_jobs
+add column if not exists job_type public.queuebuster_job_type,
+add column if not exists status public.queuebuster_job_status default 'pending',
+add column if not exists instruction text,
+add column if not exists request_payload jsonb default '{}'::jsonb,
+add column if not exists result_payload jsonb,
+add column if not exists audit_job_id uuid references public.queuebuster_jobs(id) on delete set null,
+add column if not exists requested_by uuid references public.users(id) on delete set null,
+add column if not exists confirmed_by uuid references public.users(id) on delete set null,
+add column if not exists confirmed_at timestamptz,
+add column if not exists claimed_by text,
+add column if not exists claimed_at timestamptz,
+add column if not exists run_started_at timestamptz,
+add column if not exists run_completed_at timestamptz,
+add column if not exists attempts integer default 0,
+add column if not exists last_error text,
+add column if not exists created_at timestamptz default now(),
+add column if not exists updated_at timestamptz default now();
+
+alter table public.queuebuster_jobs
+alter column job_type type public.queuebuster_job_type using job_type::text::public.queuebuster_job_type,
+alter column status type public.queuebuster_job_status using status::text::public.queuebuster_job_status,
+alter column request_payload type jsonb using request_payload::jsonb,
+alter column attempts type integer using attempts::integer;
+
+-- The table may already exist from an earlier partial setup. Backfill required
+-- fields so the constraints below can be applied idempotently.
+update public.queuebuster_jobs
+set job_type = coalesce(job_type, 'audit_flavour'::public.queuebuster_job_type),
+    status = coalesce(status, 'pending'::public.queuebuster_job_status),
+    request_payload = coalesce(request_payload, '{}'::jsonb),
+    attempts = coalesce(attempts, 0),
+    created_at = coalesce(created_at, now()),
+    updated_at = coalesce(updated_at, now());
+
+alter table public.queuebuster_jobs
+alter column job_type set not null,
+alter column status set not null,
+alter column status set default 'pending',
+alter column request_payload set not null,
+alter column request_payload set default '{}'::jsonb,
+alter column attempts set not null,
+alter column attempts set default 0,
+alter column created_at set not null,
+alter column created_at set default now(),
+alter column updated_at set not null,
+alter column updated_at set default now();
+
 do $$
 begin
   alter table public.queuebuster_jobs
@@ -92,6 +142,31 @@ create table if not exists public.queuebuster_job_events (
   actor_id uuid references public.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+alter table public.queuebuster_job_events
+add column if not exists queuebuster_job_id uuid references public.queuebuster_jobs(id) on delete cascade,
+add column if not exists event_type text,
+add column if not exists status public.queuebuster_job_status default 'pending',
+add column if not exists message text,
+add column if not exists safe_payload jsonb,
+add column if not exists actor_id uuid references public.users(id) on delete set null,
+add column if not exists created_at timestamptz default now();
+
+alter table public.queuebuster_job_events
+alter column status type public.queuebuster_job_status using status::text::public.queuebuster_job_status,
+alter column safe_payload type jsonb using safe_payload::jsonb;
+
+update public.queuebuster_job_events
+set event_type = coalesce(event_type, 'created'),
+    status = coalesce(status, 'pending'::public.queuebuster_job_status),
+    created_at = coalesce(created_at, now());
+
+alter table public.queuebuster_job_events
+alter column queuebuster_job_id set not null,
+alter column event_type set not null,
+alter column status set not null,
+alter column created_at set not null,
+alter column created_at set default now();
 
 create index if not exists queuebuster_jobs_status_created_idx
 on public.queuebuster_jobs(status, created_at);
