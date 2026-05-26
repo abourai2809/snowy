@@ -105,34 +105,54 @@ alter column updated_at set default now();
 
 do $$
 begin
-  alter table public.archive_manifests
-  add constraint archive_manifests_run_id_unique unique (run_id);
-exception
-  when duplicate_object then null;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'archive_manifests_run_id_unique'
+      and conrelid = 'public.archive_manifests'::regclass
+  ) and to_regclass('public.archive_manifests_run_id_unique') is null then
+    alter table public.archive_manifests
+    add constraint archive_manifests_run_id_unique unique (run_id);
+  end if;
 end $$;
 
 do $$
 begin
-  alter table public.archive_manifests
-  add constraint archive_manifests_window_valid check (window_end > window_start);
-exception
-  when duplicate_object then null;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'archive_manifests_window_valid'
+      and conrelid = 'public.archive_manifests'::regclass
+  ) then
+    alter table public.archive_manifests
+    add constraint archive_manifests_window_valid check (window_end > window_start);
+  end if;
 end $$;
 
 do $$
 begin
-  alter table public.archive_manifests
-  add constraint archive_manifests_source_count_nonnegative check (candidate_source_count >= 0);
-exception
-  when duplicate_object then null;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'archive_manifests_source_count_nonnegative'
+      and conrelid = 'public.archive_manifests'::regclass
+  ) then
+    alter table public.archive_manifests
+    add constraint archive_manifests_source_count_nonnegative check (candidate_source_count >= 0);
+  end if;
 end $$;
 
 do $$
 begin
-  alter table public.archive_manifests
-  add constraint archive_manifests_row_count_nonnegative check (candidate_row_count >= 0);
-exception
-  when duplicate_object then null;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'archive_manifests_row_count_nonnegative'
+      and conrelid = 'public.archive_manifests'::regclass
+  ) then
+    alter table public.archive_manifests
+    add constraint archive_manifests_row_count_nonnegative check (candidate_row_count >= 0);
+  end if;
 end $$;
 
 create table if not exists public.archive_files (
@@ -210,7 +230,7 @@ security definer
 set search_path = ''
 as $$
   select encode(
-    digest(
+    extensions.digest(
       coalesce(
         string_agg(
           c.ordinal_position::text || ':' || c.column_name || ':' || c.data_type || ':' || c.is_nullable,
@@ -269,7 +289,7 @@ begin
          'recorded_at'::text,
          format('recorded_at >= %L and recorded_at < %L', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('pan_events'),
          min(recorded_at)::date,
          max(recorded_at)::date,
@@ -287,7 +307,7 @@ begin
          'dispatched_at',
          format('dispatched_at >= %L and dispatched_at < %L', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('dispatches'),
          min(dispatched_at)::date,
          max(dispatched_at)::date,
@@ -305,7 +325,7 @@ begin
          'dispatches.dispatched_at',
          format('parent dispatches.dispatched_at >= %L and < %L', p_window_start, p_window_end),
          count(di.*)::bigint,
-         encode(digest(coalesce(string_agg(di.id::text, ',' order by di.id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(di.id::text, ',' order by di.id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('dispatch_items'),
          min(d.dispatched_at)::date,
          max(d.dispatched_at)::date,
@@ -324,7 +344,7 @@ begin
          'received_at',
          format('received_at >= %L and received_at < %L', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('store_receipts'),
          min(received_at)::date,
          max(received_at)::date,
@@ -342,7 +362,7 @@ begin
          'moved_at',
          format('moved_at >= %L and moved_at < %L', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('display_movements'),
          min(moved_at)::date,
          max(moved_at)::date,
@@ -360,7 +380,7 @@ begin
          'business_date',
          format('business_date >= %L and business_date < %L', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('end_of_day_counts'),
          min(business_date),
          max(business_date),
@@ -378,7 +398,7 @@ begin
          'end_of_day_counts.business_date',
          format('parent end_of_day_counts.business_date >= %L and < %L', p_window_start, p_window_end),
          count(ei.*)::bigint,
-         encode(digest(coalesce(string_agg(ei.id::text, ',' order by ei.id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(ei.id::text, ',' order by ei.id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('end_of_day_count_items'),
          min(ec.business_date),
          max(ec.business_date),
@@ -397,7 +417,7 @@ begin
          'business_date',
          format('business_date >= %L and business_date < %L', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('store_deep_freezer_counts'),
          min(business_date),
          max(business_date),
@@ -415,7 +435,7 @@ begin
          'store_deep_freezer_counts.business_date',
          format('parent store_deep_freezer_counts.business_date >= %L and < %L', p_window_start, p_window_end),
          count(fi.*)::bigint,
-         encode(digest(coalesce(string_agg(fi.id::text, ',' order by fi.id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(fi.id::text, ',' order by fi.id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('store_deep_freezer_count_items'),
          min(fc.business_date),
          max(fc.business_date),
@@ -434,7 +454,7 @@ begin
          'adjusted_at',
          format('adjusted_at >= %L and adjusted_at < %L', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('inventory_adjustments'),
          min(adjusted_at)::date,
          max(adjusted_at)::date,
@@ -452,7 +472,7 @@ begin
          'work_date',
          format('work_date >= %L and work_date < %L', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('attendance_entries'),
          min(work_date),
          max(work_date),
@@ -470,7 +490,7 @@ begin
          'adjusted_at',
          format('adjusted_at >= %L and adjusted_at < %L', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('attendance_adjustments'),
          min(adjusted_at)::date,
          max(adjusted_at)::date,
@@ -488,7 +508,7 @@ begin
          'created_at',
          format('created_at >= %L and created_at < %L and status in (fulfilled, cancelled)', p_window_start, p_window_end),
          count(*)::bigint,
-         encode(digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(id::text, ',' order by id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('urgent_requirements'),
          min(created_at)::date,
          max(created_at)::date,
@@ -507,7 +527,7 @@ begin
          'urgent_requirements.created_at',
          format('parent urgent_requirements.created_at >= %L and < %L and parent status in (fulfilled, cancelled)', p_window_start, p_window_end),
          count(re.*)::bigint,
-         encode(digest(coalesce(string_agg(re.id::text, ',' order by re.id::text), ''), 'sha256'), 'hex'),
+         encode(extensions.digest(coalesce(string_agg(re.id::text, ',' order by re.id::text), ''), 'sha256'), 'hex'),
          public.archive_table_schema_hash('urgent_requirement_events'),
          min(r.created_at)::date,
          max(r.created_at)::date,
