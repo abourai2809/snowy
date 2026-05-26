@@ -4,12 +4,14 @@ import { resetDemoStaffData } from "../admin/staff/staffApi";
 import { resetDemoAttendanceData } from "../attendance/attendanceApi";
 import { renderApp, screen, userEvent, waitFor, within } from "../../test/render";
 import { resetDemoCatalogData } from "./catalogApi";
+import { resetDemoQueueBusterData } from "../queuebuster/queueBusterJobsApi";
 
 describe("CatalogPage", () => {
   beforeEach(() => {
     resetDemoCatalogData();
     resetDemoStaffData();
     resetDemoAttendanceData();
+    resetDemoQueueBusterData();
   });
 
   it("adds an Admin-created flavour and shows it in the Lab production selector", async () => {
@@ -73,6 +75,35 @@ describe("CatalogPage", () => {
     await checkInStoreStaff(user);
 
     await waitFor(() => expect(screen.queryByText("Napkins")).not.toBeInTheDocument());
+  });
+
+  it("queues QueueBuster sync actions from catalog rows", async () => {
+    const user = userEvent.setup();
+    renderApp(<App initialRole="admin" />);
+    await user.click(screen.getByRole("button", { name: "Catalog" }));
+
+    await user.click(await screen.findByRole("button", { name: "Add PISTACHTO to QueueBuster" }));
+    expect(
+      await screen.findByText("Queued QueueBuster audit and add request for PISTACHTO."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "QueueBuster" }));
+    expect(await screen.findByText("Needs confirmation")).toBeInTheDocument();
+    expect(screen.getAllByText("PISTACHTO").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("queues QueueBuster product checks from product rows", async () => {
+    const user = userEvent.setup();
+    renderApp(<App initialRole="admin" />);
+    await user.click(screen.getByRole("button", { name: "Catalog" }));
+    await user.click(await screen.findByRole("button", { name: "Products" }));
+
+    await user.click(await screen.findByRole("button", { name: "Check Waffle Cone in QueueBuster" }));
+    expect(await screen.findByText("Queued QueueBuster product check for Waffle Cone.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "QueueBuster" }));
+    await waitFor(() => expect(screen.getAllByText("Catalog products check").length).toBeGreaterThanOrEqual(1));
+    expect(screen.getByText("Check QueueBuster catalog product for Waffle Cone.")).toBeInTheDocument();
   });
 });
 

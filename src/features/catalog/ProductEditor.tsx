@@ -2,6 +2,8 @@ import { useState, type FormEvent } from "react";
 import type { CatalogItem, CatalogScope, Product } from "../../domain/catalog";
 import { CATALOG_SCOPE_LABELS } from "../../domain/catalog";
 import type { Flavour } from "../../domain/flavours";
+import { useAuth } from "../auth/AuthProvider";
+import { createQueueBusterJob } from "../queuebuster/queueBusterJobsApi";
 import { removeProduct, saveProduct, setProductActive } from "./catalogApi";
 
 interface ProductEditorProps {
@@ -21,15 +23,50 @@ const emptyForm = {
 };
 
 export function ProductEditor({ products, items, flavours, onChanged }: ProductEditorProps) {
+  const { profile } = useAuth();
   const [editingId, setEditingId] = useState<string | undefined>();
   const [form, setForm] = useState(emptyForm);
+  const [queueMessage, setQueueMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await saveProduct(form, editingId);
-    setForm(emptyForm);
-    setEditingId(undefined);
-    await onChanged();
+    try {
+      await saveProduct(form, editingId);
+      setForm(emptyForm);
+      setEditingId(undefined);
+      setError(null);
+      await onChanged();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Unable to save product.");
+    }
+  }
+
+  async function queueQueueBusterCheck(product: Product) {
+    if (!profile) return;
+
+    try {
+      setError(null);
+      setQueueMessage(null);
+      await createQueueBusterJob({
+        actorRole: profile.role,
+        requestedBy: profile.id,
+        jobType: "catalog_products_check",
+        instruction: `Check QueueBuster catalog product for ${product.name}.`,
+        requestPayload: {
+          productId: product.id,
+          productKey: product.productKey,
+          productName: product.name,
+          catalogItemId: product.catalogItemId,
+          flavourId: product.flavourId,
+          scope: product.scope,
+          trackInventory: product.trackInventory,
+        },
+      });
+      setQueueMessage(`Queued QueueBuster product check for ${product.name}.`);
+    } catch (queueError) {
+      setError(queueError instanceof Error ? queueError.message : "Unable to queue QueueBuster job.");
+    }
   }
 
   return (
@@ -82,6 +119,8 @@ export function ProductEditor({ products, items, flavours, onChanged }: ProductE
           {editingId ? "Save product" : "Add product"}
         </button>
       </form>
+      {error ? <div className="alert alert-danger">{error}</div> : null}
+      {queueMessage ? <div className="alert alert-success">{queueMessage}</div> : null}
 
       <div className="list-stack catalog-list">
         {products.map((product) => (
@@ -113,6 +152,14 @@ export function ProductEditor({ products, items, flavours, onChanged }: ProductE
                 await onChanged();
               }}>
                 {product.active ? "Deactivate" : "Reactivate"}
+              </button>
+              <button
+                aria-label={`Check ${product.name} in QueueBuster`}
+                className="secondary-button"
+                type="button"
+                onClick={() => void queueQueueBusterCheck(product)}
+              >
+                QB check
               </button>
               <button className="danger-button" type="button" onClick={async () => {
                 await removeProduct(product.id);

@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from "react";
 import type { Flavour } from "../../domain/flavours";
+import type { QueueBusterJobType } from "../../domain/queueBuster";
+import { useAuth } from "../auth/AuthProvider";
+import { createQueueBusterJob } from "../queuebuster/queueBusterJobsApi";
 import { removeFlavour, saveFlavour, setFlavourActive } from "./catalogApi";
 
 interface FlavourEditorProps {
@@ -15,9 +18,11 @@ const emptyForm = {
 };
 
 export function FlavourEditor({ flavours, onChanged }: FlavourEditorProps) {
+  const { profile } = useAuth();
   const [editingId, setEditingId] = useState<string | undefined>();
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
+  const [queueMessage, setQueueMessage] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,6 +45,53 @@ export function FlavourEditor({ flavours, onChanged }: FlavourEditorProps) {
   async function remove(flavour: Flavour) {
     await removeFlavour(flavour.id);
     await onChanged();
+  }
+
+  async function queueQueueBusterJob(flavour: Flavour, jobType: Extract<QueueBusterJobType, "audit_flavour" | "add_flavour" | "fix_flavour">) {
+    if (!profile) return;
+
+    try {
+      setError(null);
+      setQueueMessage(null);
+      const requestPayload = {
+        flavourId: flavour.id,
+        flavourName: flavour.name.trim().toUpperCase(),
+        shortCode: flavour.shortCode,
+      };
+
+      if (jobType === "audit_flavour") {
+        await createQueueBusterJob({
+          actorRole: profile.role,
+          requestedBy: profile.id,
+          jobType,
+          requestPayload,
+          instruction: `Audit QueueBuster flavour bundle for ${flavour.name}.`,
+        });
+        setQueueMessage(`Queued QueueBuster audit for ${flavour.name}.`);
+        return;
+      }
+
+      const auditJob = await createQueueBusterJob({
+        actorRole: profile.role,
+        requestedBy: profile.id,
+        jobType: "audit_flavour",
+        requestPayload,
+        instruction: `Audit before ${jobType === "add_flavour" ? "adding" : "fixing"} ${flavour.name}.`,
+      });
+      await createQueueBusterJob({
+        actorRole: profile.role,
+        requestedBy: profile.id,
+        jobType,
+        auditJobId: auditJob.id,
+        requestPayload,
+        instruction: `${jobType === "add_flavour" ? "Add" : "Fix"} ${flavour.name} after audit succeeds and Admin confirms.`,
+      });
+      setQueueMessage(
+        `Queued QueueBuster audit and ${jobType === "add_flavour" ? "add" : "fix"} request for ${flavour.name}.`,
+      );
+    } catch (queueError) {
+      setError(queueError instanceof Error ? queueError.message : "Unable to queue QueueBuster job.");
+    }
   }
 
   return (
@@ -76,6 +128,7 @@ export function FlavourEditor({ flavours, onChanged }: FlavourEditorProps) {
           <span>Sorbet</span>
         </label>
         {error ? <div className="alert alert-danger">{error}</div> : null}
+        {queueMessage ? <div className="alert alert-success">{queueMessage}</div> : null}
         <button className="primary-button" type="submit">
           {editingId ? "Save flavour" : "Add flavour"}
         </button>
@@ -106,6 +159,30 @@ export function FlavourEditor({ flavours, onChanged }: FlavourEditorProps) {
               </button>
               <button className="secondary-button" type="button" onClick={() => setActive(flavour, !flavour.active)}>
                 {flavour.active ? "Deactivate" : "Reactivate"}
+              </button>
+              <button
+                aria-label={`Audit ${flavour.name} in QueueBuster`}
+                className="secondary-button"
+                type="button"
+                onClick={() => void queueQueueBusterJob(flavour, "audit_flavour")}
+              >
+                QB audit
+              </button>
+              <button
+                aria-label={`Add ${flavour.name} to QueueBuster`}
+                className="secondary-button"
+                type="button"
+                onClick={() => void queueQueueBusterJob(flavour, "add_flavour")}
+              >
+                QB add
+              </button>
+              <button
+                aria-label={`Fix ${flavour.name} in QueueBuster`}
+                className="secondary-button"
+                type="button"
+                onClick={() => void queueQueueBusterJob(flavour, "fix_flavour")}
+              >
+                QB fix
               </button>
               <button className="danger-button" type="button" onClick={() => remove(flavour)}>
                 Remove
