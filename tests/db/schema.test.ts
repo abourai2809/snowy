@@ -38,6 +38,8 @@ const expectedTables = [
   "attendance_adjustments",
   "urgent_requirements",
   "urgent_requirement_events",
+  "queuebuster_jobs",
+  "queuebuster_job_events",
 ];
 
 const expectedEnums = [
@@ -53,6 +55,8 @@ const expectedEnums = [
   "fill_state",
   "count_status",
   "attendance_status",
+  "queuebuster_job_type",
+  "queuebuster_job_status",
 ];
 
 describe("operations database schema", { skip: !connectionString }, () => {
