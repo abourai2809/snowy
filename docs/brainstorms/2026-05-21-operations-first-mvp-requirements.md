@@ -91,6 +91,8 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - R12. Store managers must be able to correct same-day store inventory submissions, and Admin must be able to correct historical inventory records without mandatory reason notes in MVP.
 - R22. Lab production and lab dispatch must be separate workflows: production adds pans to lab inventory, while dispatch moves selected available lab inventory to a store and automatically reduces the remaining available lab inventory.
 - R23. Store end-of-day gelato weights must be easy to find as a distinct action. The workflow should support choosing display flavours and entering weights, while preserving pan-level traceability where pan IDs are available.
+- R24. Submitting end-of-day display gelato weights must automatically return non-empty display pans to backup/deep-freezer inventory and close zero-weight display pans as depleted, without adding another store-staff reporting step.
+- R25. The backend must calculate empty gelato pan counts per store as the sum of closed zero-weight pans at that store, so Admin can see empty-pan totals without asking staff to report them separately.
 
 **Supplies and other inventory**
 - R13. Lab raw materials, lab supplies, store supplies, packaging, serving supplies, and other operationally counted items must be managed as inventory by location.
@@ -116,7 +118,7 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - AE3. **Covers R4.** Given Store Staff is counting supplies and notices a missing item, when they use the app, they cannot create a new catalog item and must ask Admin to add it.
 - AE4. **Covers R6, R7, R8, R9, R22.** Given Lab creates three pans of a flavour, when production is saved, all three pans appear in lab inventory. When Lab later dispatches two to Rajpur, lab available inventory shows one remaining pan and Rajpur sees two incoming pan IDs.
 - AE5. **Covers R10.** Given Store Staff enters a pan ID to move it to display, when they choose Partial, the app requires weight before saving the movement.
-- AE6. **Covers R11, R14, R23.** Given it is end of day, when Store Staff opens EOD gelato weight entry, they can choose display flavours/pans and enter weights, then complete the supply checklist without being asked to count every backup freezer pan.
+- AE6. **Covers R11, R14, R23, R24, R25.** Given it is end of day, when Store Staff opens EOD gelato weight entry, they can choose display flavours/pans and enter weights, then complete the supply checklist without being asked to count every backup freezer pan. Non-empty display pans return to backup inventory automatically, zero-weight pans are counted as empty pans for that store, and Store Staff do not need a separate display-to-deep workflow.
 - AE7. **Covers R12.** Given a store staff member submitted an incorrect same-day count, when Store Manager corrects it, the corrected value becomes the official MVP value without a mandatory reason note.
 - AE8. **Covers R16, R17, R18, R19.** Given Admin configured staff and allowed holidays, when staff check in/out through the app, Admin can review attendance and apply bonus days where needed.
 
@@ -128,6 +130,8 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - Admin can maintain all master data needed for MVP workflows without developer intervention.
 - Lab-to-store gelato movement is traceable by pan ID from production through store acceptance and display movement.
 - End-of-day store counts capture display gelato weights and supply counts with minimal staff friction.
+- End-of-day display counts update pan lifecycle state automatically: remaining display weight returns to backup, and zero-weight display pans become closed empty pans.
+- Admin can see store-level empty-pan totals derived from pan state.
 - Lab production and dispatch are operationally separate: adding production does not imply dispatch, and dispatch consumes available lab inventory.
 - Attendance and roster management are usable enough for daily staff tracking and payroll review.
 - A planner can move from this document to `ce-plan` without inventing persona permissions, MVP scope, or deferred POS behavior.
@@ -142,6 +146,7 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - Full immutable audit trail, correction reason requirements, and detailed change history are deferred.
 - Native iOS/Android apps are out of scope; MVP is browser-based and may later become a PWA.
 - Staff-created catalog items are out of scope.
+- Precise pan-to-pan consolidation/refill tracking is deferred. The MVP may treat almost-empty display pans as depleted if staff consolidate them manually, but a future workflow can track source pan ID, target pan ID, before/after weights, actor, and time.
 
 ---
 
@@ -153,6 +158,7 @@ QueueBuster/POS reconciliation matters later, but MVP value comes from making ph
 - Admin-only catalog: Master data is controlled centrally; staff workflows stay simple.
 - `panRole` remains: The existing role language is accepted and should align with the manuals.
 - Simple pan IDs: Staff-friendly IDs are required, even if flavour-code collision handling remains open.
+- EOD auto-return: A display pan with non-zero EOD weight is treated as returned to backup/deep-freezer stock after closing; a display pan with zero EOD weight is treated as depleted and contributes to the store empty-pan total.
 - POS CSVs later: Future QueueBuster data should likely be stored as import/reconciliation staging data, not as the operational source of truth.
 
 ---

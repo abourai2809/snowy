@@ -39,3 +39,8 @@ Apply the baseline schema and seed data from `supabase/migrations` and `supabase
 ## QueueBuster Worker
 
 QueueBuster jobs are created from the Admin Catalog page and executed by a backend worker, not by frontend code. See `docs/queuebuster-worker.md` for the worker environment, allowlisted command contract, and dry-run mode.
+
+## Product Docs
+
+- `docs/product-feature-inventory.md` is the current source list of implemented and planned app features.
+- `docs/plans/2026-05-21-001-feat-operations-first-mvp-plan.md` tracks MVP implementation units and dependencies.

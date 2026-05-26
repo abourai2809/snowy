@@ -1,6 +1,6 @@
 import type { Dispatch } from "../../domain/dispatches";
 import type { EodCount, EodCountItem, DisplayMovement, FillState, StoreReceipt } from "../../domain/inventory";
-import type { Pan } from "../../domain/pans";
+import type { Pan, PanEvent, PanRole } from "../../domain/pans";
 import { isStoreRole, type AppRole } from "../../domain/roles";
 import { validateGelatoPanWeightKg } from "../../domain/weights";
 import { isSupabaseConfigured, requireSupabaseClient } from "../../lib/supabase";
@@ -60,10 +60,28 @@ export interface EodGelatoCorrectionInput {
   correctedBy: string | null;
 }
 
+export interface StoreEmptyPanCount {
+  locationId: string;
+  emptyPanCount: number;
+}
+
+interface PanEventInput {
+  panUuid: string;
+  eventType: string;
+  fromLocationId: string | null;
+  toLocationId: string | null;
+  fromRole: PanRole | null;
+  toRole: PanRole | null;
+  weightKg: number | null;
+  recordedBy: string | null;
+  metadata?: Record<string, unknown>;
+}
+
 let demoReceipts: StoreReceipt[] = [];
 let demoDisplayMovements: DisplayMovement[] = [];
 let demoEodCounts: EodCount[] = [];
 let demoEodCountItems: EodCountItem[] = [];
+let demoPanEvents: PanEvent[] = [];
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -125,6 +143,22 @@ function mapEodCountItem(row: Record<string, unknown>): EodCountItem {
   };
 }
 
+function mapPanEvent(row: Record<string, unknown>): PanEvent {
+  return {
+    id: String(row.id),
+    panUuid: String(row.pan_uuid),
+    eventType: String(row.event_type),
+    fromLocationId: row.from_location_id ? String(row.from_location_id) : null,
+    toLocationId: row.to_location_id ? String(row.to_location_id) : null,
+    fromRole: row.from_role ? (row.from_role as PanRole) : null,
+    toRole: row.to_role ? (row.to_role as PanRole) : null,
+    weightKg: row.weight_kg === null || row.weight_kg === undefined ? null : Number(row.weight_kg),
+    recordedBy: row.recorded_by ? String(row.recorded_by) : null,
+    recordedAt: String(row.recorded_at),
+    metadata: row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {},
+  };
+}
+
 function isGelatoEodItem(item: EodCountItem): boolean {
   return item.panId !== null || item.flavourId !== null;
 }
@@ -134,6 +168,7 @@ export function resetDemoStoreData() {
   demoDisplayMovements = [];
   demoEodCounts = [];
   demoEodCountItems = [];
+  demoPanEvents = [];
 }
 
 function assertStoreLocation(actor: StoreActor, locationId: string) {
@@ -222,6 +257,45 @@ async function createDisplayMovement(input: DisplayMovementInput): Promise<Displ
 
   if (error) throw error;
   return mapDisplayMovement(data);
+}
+
+async function recordPanEvent(input: PanEventInput): Promise<PanEvent> {
+  if (!isSupabaseConfigured) {
+    const event: PanEvent = {
+      id: makeId("pan-event"),
+      panUuid: input.panUuid,
+      eventType: input.eventType,
+      fromLocationId: input.fromLocationId,
+      toLocationId: input.toLocationId,
+      fromRole: input.fromRole,
+      toRole: input.toRole,
+      weightKg: input.weightKg,
+      recordedBy: input.recordedBy,
+      recordedAt: new Date().toISOString(),
+      metadata: input.metadata ?? {},
+    };
+    demoPanEvents.push(event);
+    return event;
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("pan_events")
+    .insert({
+      pan_uuid: input.panUuid,
+      event_type: input.eventType,
+      from_location_id: input.fromLocationId,
+      to_location_id: input.toLocationId,
+      from_role: input.fromRole,
+      to_role: input.toRole,
+      weight_kg: input.weightKg,
+      recorded_by: input.recordedBy,
+      metadata: input.metadata ?? {},
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapPanEvent(data);
 }
 
 async function findEodCount(locationId: string, businessDate: string): Promise<EodCount | null> {
@@ -399,6 +473,23 @@ export async function listDisplayMovements(locationId?: string): Promise<Display
   return data.map(mapDisplayMovement);
 }
 
+export async function listPanEvents(locationId?: string): Promise<PanEvent[]> {
+  if (!isSupabaseConfigured) {
+    return demoPanEvents.filter(
+      (event) => !locationId || event.fromLocationId === locationId || event.toLocationId === locationId,
+    );
+  }
+
+  let query = requireSupabaseClient().from("pan_events").select("*").order("recorded_at");
+  if (locationId) {
+    query = query.or(`from_location_id.eq.${locationId},to_location_id.eq.${locationId}`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.map(mapPanEvent);
+}
+
 export async function movePanToDisplay(input: DisplayMovementInput): Promise<DisplayMovement> {
   assertStoreLocation(input, input.storeLocationId);
 
@@ -429,6 +520,17 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
   }
 
   const movement = await createDisplayMovement({ ...input, weightKg: displayWeightKg });
+  await recordPanEvent({
+    panUuid: pan.id,
+    eventType: "moved_to_display",
+    fromLocationId: pan.currentLocationId,
+    toLocationId: input.storeLocationId,
+    fromRole: pan.panRole,
+    toRole: "display",
+    weightKg: displayWeightKg,
+    recordedBy: input.actorId,
+    metadata: { fillState: input.fillState, movementId: movement.id },
+  });
   await updatePanState(pan.id, {
     currentWeightKg: displayWeightKg,
     panRole: "display",
@@ -447,26 +549,44 @@ export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCou
     throw new Error(weightError);
   }
 
-  const displayPans = await listDisplayPans(input.locationId);
+  const existing = await findEodCount(input.locationId, input.businessDate);
+  if (existing) {
+    assertCanCorrectCount(input, input.businessDate);
+  }
+
+  const [displayPans, existingItems] = await Promise.all([
+    listDisplayPans(input.locationId),
+    existing ? listEodItems(existing.id) : Promise.resolve([]),
+  ]);
   const displayPanById = new Map(displayPans.map((pan) => [pan.id, pan]));
-  const activeFlavourIds = new Set((await listFlavours(true)).map((flavour) => flavour.id));
-  const normalizedItems = input.items.map((item) => ({
+  const existingPanIds = new Set(existingItems.map((item) => item.panId).filter((panId): panId is string => Boolean(panId)));
+  const baseItems = input.items.map((item) => ({
     ...item,
     panUuid: item.panUuid ?? null,
-    flavourId: item.flavourId ?? (item.panUuid ? displayPanById.get(item.panUuid)?.flavourId ?? null : null),
+    flavourId: item.flavourId ?? null,
   }));
-  const hasInvalidPan = normalizedItems.some((item) => item.panUuid && !displayPanById.has(item.panUuid));
+  const itemPanUuids = [...new Set(baseItems.map((item) => item.panUuid).filter((panUuid): panUuid is string => Boolean(panUuid)))];
+  const itemPans = await listPansByIds(itemPanUuids);
+  const panById = new Map([...displayPans, ...itemPans].map((pan) => [pan.id, pan]));
+  const activeFlavourIds = new Set((await listFlavours(true)).map((flavour) => flavour.id));
+  const normalizedItems = baseItems.map((item) => ({
+    ...item,
+    flavourId: item.flavourId ?? (item.panUuid ? panById.get(item.panUuid)?.flavourId ?? null : null),
+  }));
+  const hasInvalidPan = normalizedItems.some((item) => {
+    if (!item.panUuid) return false;
+
+    const pan = panById.get(item.panUuid);
+    if (!pan || pan.currentLocationId !== input.locationId) return true;
+
+    return !displayPanById.has(item.panUuid) && !existingPanIds.has(item.panUuid);
+  });
   if (hasInvalidPan) {
     throw new Error("End-of-day gelato counts can only include display pans.");
   }
   const hasInvalidFlavour = normalizedItems.some((item) => !item.flavourId || !activeFlavourIds.has(item.flavourId));
   if (hasInvalidFlavour) {
     throw new Error("End-of-day gelato counts can only include active flavours or display pans.");
-  }
-
-  const existing = await findEodCount(input.locationId, input.businessDate);
-  if (existing) {
-    assertCanCorrectCount(input, input.businessDate);
   }
 
   const count = existing
@@ -479,17 +599,104 @@ export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCou
     : await createEodCount(input);
 
   const items = await replaceEodItems(count.id, normalizedItems);
-  await Promise.all(
-    normalizedItems
-      .filter((item) => item.panUuid)
-      .map((item) =>
-        updatePanState(item.panUuid!, {
-          currentWeightKg: item.weightKg,
-        }),
-      ),
-  );
+  await finalizeEodDisplayPans(input, count.id, normalizedItems, panById);
 
   return { ...count, items };
+}
+
+async function finalizeEodDisplayPans(
+  input: EodCountInput,
+  countId: string,
+  items: EodCountInput["items"],
+  panById: Map<string, Pan>,
+) {
+  await Promise.all(
+    items
+      .filter((item) => item.panUuid)
+      .map(async (item) => {
+        const pan = panById.get(item.panUuid!);
+        if (!pan) return;
+
+        if (item.weightKg <= 0) {
+          await recordPanEvent({
+            panUuid: pan.id,
+            eventType: "display_pan_depleted",
+            fromLocationId: pan.currentLocationId,
+            toLocationId: pan.currentLocationId,
+            fromRole: pan.panRole,
+            toRole: "store",
+            weightKg: 0,
+            recordedBy: input.actorId,
+            metadata: { countId, businessDate: input.businessDate },
+          });
+          await updatePanState(pan.id, {
+            currentWeightKg: 0,
+            panRole: "store",
+            status: "closed",
+            active: false,
+          });
+          return;
+        }
+
+        await recordPanEvent({
+          panUuid: pan.id,
+          eventType: "display_pan_returned_to_backup",
+          fromLocationId: pan.currentLocationId,
+          toLocationId: pan.currentLocationId,
+          fromRole: pan.panRole,
+          toRole: "backup",
+          weightKg: item.weightKg,
+          recordedBy: input.actorId,
+          metadata: { countId, businessDate: input.businessDate },
+        });
+        await updatePanState(pan.id, {
+          currentWeightKg: item.weightKg,
+          panRole: "backup",
+          status: "received",
+          active: true,
+        });
+      }),
+  );
+}
+
+export async function listEmptyPanCountsByStore(locationId?: string): Promise<StoreEmptyPanCount[]> {
+  if (isSupabaseConfigured) {
+    const supabase = requireSupabaseClient();
+    let query = supabase
+      .from("store_empty_pan_counts")
+      .select("location_id, empty_pan_count")
+      .order("location_id");
+
+    if (locationId) {
+      query = query.eq("location_id", locationId);
+    }
+
+    const { data, error } = await query;
+    if (!error) {
+      return data.map((row) => ({
+        locationId: String(row.location_id),
+        emptyPanCount: Number(row.empty_pan_count ?? 0),
+      }));
+    }
+  }
+
+  const counts = new Map<string, number>();
+  const pans = await listAllPans();
+
+  pans
+    .filter((pan) => {
+      if (!pan.currentLocationId) return false;
+      if (locationId && pan.currentLocationId !== locationId) return false;
+
+      return pan.status === "closed" && !pan.active && (pan.currentWeightKg ?? 0) <= 0;
+    })
+    .forEach((pan) => {
+      counts.set(pan.currentLocationId!, (counts.get(pan.currentLocationId!) ?? 0) + 1);
+    });
+
+  return [...counts.entries()]
+    .map(([countLocationId, emptyPanCount]) => ({ locationId: countLocationId, emptyPanCount }))
+    .sort((a, b) => a.locationId.localeCompare(b.locationId));
 }
 
 async function createEodCount(input: EodCountInput): Promise<EodCount> {

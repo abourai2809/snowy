@@ -12,7 +12,7 @@ import { isSupabaseConfigured, requireSupabaseClient } from "../../lib/supabase"
 import { listLocations } from "../admin/staff/staffApi";
 import { listFlavours } from "../catalog/catalogApi";
 import { listDispatchItems, listPansByIds } from "../lab/labApi";
-import { listDisplayMovements, listStoreReceipts, type StoreActor } from "./storeApi";
+import { listDisplayMovements, listPanEvents, listStoreReceipts, type StoreActor } from "./storeApi";
 
 export interface DeepFreezerCountInput extends StoreActor {
   locationId: string;
@@ -463,13 +463,32 @@ async function listDisplayMovedWeightsByFlavour(locationId: string, baselineMs: 
   return displayMovedWeights;
 }
 
+async function listDisplayReturnedWeightsByFlavour(locationId: string, baselineMs: number): Promise<Map<string, number>> {
+  const returnedWeights = new Map<string, number>();
+  const events = (await listPanEvents(locationId)).filter(
+    (event) => event.eventType === "display_pan_returned_to_backup" && happenedAfterBaseline(event.recordedAt, baselineMs),
+  );
+  const pans = await listPansByIds([...new Set(events.map((event) => event.panUuid))]);
+  const panById = new Map(pans.map((pan) => [pan.id, pan]));
+
+  events.forEach((event) => {
+    const pan = panById.get(event.panUuid);
+    if (!pan) return;
+
+    addWeight(returnedWeights, pan.flavourId, event.weightKg ?? 0);
+  });
+
+  return returnedWeights;
+}
+
 export async function listProjectedDeepFreezerBalances(locationId: string): Promise<DeepFreezerBalance[]> {
   const [flavours, latestCount] = await Promise.all([listFlavours(true), getLatestDeepFreezerCount(locationId)]);
   const baselineMs = baselineCutoffMs(latestCount);
   const baseWeights = new Map(latestCount?.items.map((item) => [item.flavourId, item.weightKg]) ?? []);
-  const [receivedWeights, displayMovedWeights] = await Promise.all([
+  const [receivedWeights, displayMovedWeights, displayReturnedWeights] = await Promise.all([
     listReceivedWeightsByFlavour(locationId, baselineMs),
     listDisplayMovedWeightsByFlavour(locationId, baselineMs),
+    listDisplayReturnedWeightsByFlavour(locationId, baselineMs),
   ]);
 
   return flavours
@@ -477,6 +496,7 @@ export async function listProjectedDeepFreezerBalances(locationId: string): Prom
       const baseWeightKg = baseWeights.get(flavour.id) ?? 0;
       const receivedWeightKg = receivedWeights.get(flavour.id) ?? 0;
       const displayMovedWeightKg = displayMovedWeights.get(flavour.id) ?? 0;
+      const displayReturnedWeightKg = displayReturnedWeights.get(flavour.id) ?? 0;
 
       return {
         locationId,
@@ -485,7 +505,8 @@ export async function listProjectedDeepFreezerBalances(locationId: string): Prom
         baseWeightKg,
         receivedWeightKg,
         displayMovedWeightKg,
-        currentWeightKg: roundWeightKg(baseWeightKg + receivedWeightKg - displayMovedWeightKg),
+        displayReturnedWeightKg,
+        currentWeightKg: roundWeightKg(baseWeightKg + receivedWeightKg - displayMovedWeightKg + displayReturnedWeightKg),
         sourceCountId: latestCount?.id ?? null,
         sourceBusinessDate: latestCount?.businessDate ?? null,
       };

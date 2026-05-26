@@ -24,6 +24,20 @@ export interface Pan {
   active: boolean;
 }
 
+export interface PanEvent {
+  id: string;
+  panUuid: string;
+  eventType: string;
+  fromLocationId: string | null;
+  toLocationId: string | null;
+  fromRole: PanRole | null;
+  toRole: PanRole | null;
+  weightKg: number | null;
+  recordedBy: string | null;
+  recordedAt: string;
+  metadata: Record<string, unknown>;
+}
+
 export function buildPanId(shortCode: string, productionDate: string, sequence: number): string {
   const numericDate = productionDate.replace(/-/g, "");
   return `${shortCode.toUpperCase()}-${numericDate}-${String(sequence).padStart(2, "0")}`;

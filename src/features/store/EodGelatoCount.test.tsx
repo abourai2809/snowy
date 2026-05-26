@@ -6,8 +6,11 @@ import { resetDemoDeepFreezerData, submitDeepFreezerCount } from "./deepFreezerA
 import { EodGelatoCount } from "./EodGelatoCount";
 import {
   acceptIncomingDispatch,
+  listBackupPans,
   listIncomingDispatches,
   listDisplayPans,
+  listEmptyPanCountsByStore,
+  listPanEvents,
   movePanToDisplay,
   resetDemoStoreData,
   submitEodGelatoCount,
@@ -65,6 +68,97 @@ describe("store EOD gelato counts", () => {
     expect(count.status).toBe("submitted");
     expect(count.items).toHaveLength(1);
     expect(count.items[0].panId).toBe(displayPanUuid);
+  });
+
+  it("auto-returns non-empty display pans to backup after EOD submit", async () => {
+    const [displayPanUuid] = await seedStorePans(1);
+    await movePanToDisplay({
+      panUuid: displayPanUuid,
+      storeLocationId: "malsi",
+      fillState: "partial",
+      weightKg: 1.2,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    await submitEodGelatoCount({
+      locationId: "malsi",
+      businessDate: todayDate(),
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ panUuid: displayPanUuid, weightKg: 1.1 }],
+    });
+
+    const [displayPans, backupPans, events] = await Promise.all([
+      listDisplayPans("malsi"),
+      listBackupPans("malsi"),
+      listPanEvents("malsi"),
+    ]);
+
+    expect(displayPans).toHaveLength(0);
+    expect(backupPans).toEqual([
+      expect.objectContaining({
+        id: displayPanUuid,
+        currentWeightKg: 1.1,
+        panRole: "backup",
+        status: "received",
+      }),
+    ]);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          panUuid: displayPanUuid,
+          eventType: "display_pan_returned_to_backup",
+          weightKg: 1.1,
+        }),
+      ]),
+    );
+  });
+
+  it("closes zero-weight display pans and counts empty pans by store", async () => {
+    const [displayPanUuid] = await seedStorePans(1);
+    await movePanToDisplay({
+      panUuid: displayPanUuid,
+      storeLocationId: "malsi",
+      fillState: "partial",
+      weightKg: 0.5,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    await submitEodGelatoCount({
+      locationId: "malsi",
+      businessDate: todayDate(),
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ panUuid: displayPanUuid, weightKg: 0 }],
+    });
+
+    const [displayPans, backupPans, emptyCounts, events] = await Promise.all([
+      listDisplayPans("malsi"),
+      listBackupPans("malsi"),
+      listEmptyPanCountsByStore("malsi"),
+      listPanEvents("malsi"),
+    ]);
+
+    expect(displayPans).toHaveLength(0);
+    expect(backupPans).toHaveLength(0);
+    expect(emptyCounts).toEqual([{ locationId: "malsi", emptyPanCount: 1 }]);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          panUuid: displayPanUuid,
+          eventType: "display_pan_depleted",
+          weightKg: 0,
+        }),
+      ]),
+    );
   });
 
   it("records display flavour weights when a pan ID is unavailable", async () => {

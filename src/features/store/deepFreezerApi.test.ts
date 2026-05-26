@@ -10,7 +10,7 @@ import {
   submitDeepFreezerCount,
 } from "./deepFreezerApi";
 import { createDispatch, createProduction, resetDemoLabData } from "../lab/labApi";
-import { acceptIncomingDispatch, movePanToDisplay, resetDemoStoreData } from "./storeApi";
+import { acceptIncomingDispatch, movePanToDisplay, resetDemoStoreData, submitEodGelatoCount } from "./storeApi";
 
 describe("deep freezer inventory", () => {
   beforeEach(() => {
@@ -221,5 +221,26 @@ describe("deep freezer inventory", () => {
         neededWeightKg: 4,
       }),
     ]);
+
+    await submitEodGelatoCount({
+      locationId: "malsi",
+      businessDate: "2026-05-24",
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ panUuid: production.pans[0].id, weightKg: 1 }],
+    });
+
+    balances = await listProjectedDeepFreezerBalances("malsi");
+    expect(balances.find((item) => item.flavourId === flavour!.id)).toEqual(
+      expect.objectContaining({
+        baseWeightKg: 2,
+        receivedWeightKg: 3,
+        displayMovedWeightKg: 3,
+        displayReturnedWeightKg: 1,
+        currentWeightKg: 3,
+      }),
+    );
   });
 });

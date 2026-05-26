@@ -91,6 +91,7 @@ export interface DeepFreezerBalance {
   baseWeightKg: number;
   receivedWeightKg: number;
   displayMovedWeightKg: number;
+  displayReturnedWeightKg: number;
   currentWeightKg: number;
   sourceCountId: string | null;
   sourceBusinessDate: string | null;

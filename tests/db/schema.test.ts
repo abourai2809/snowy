@@ -64,6 +64,10 @@ const expectedEnums = [
   "archive_manifest_mode",
 ];
 
+const expectedViews = [
+  "store_empty_pan_counts",
+];
+
 describe("operations database schema", { skip: !connectionString }, () => {
   before(async () => {
     const pg = await import("pg") as unknown as { Pool: new (config: { connectionString: string }) => PoolLike };
@@ -106,6 +110,22 @@ describe("operations database schema", { skip: !connectionString }, () => {
     const actual = new Set(result.rows.map((row) => String(row.typname)));
     for (const enumName of expectedEnums) {
       assert.equal(actual.has(enumName), true, `missing enum ${enumName}`);
+    }
+  });
+
+  it("creates required public views", async () => {
+    const result = await pool!.query(
+      `
+      select table_name
+      from information_schema.views
+      where table_schema = 'public'
+      order by table_name
+      `
+    );
+
+    const actual = new Set(result.rows.map((row) => String(row.table_name)));
+    for (const viewName of expectedViews) {
+      assert.equal(actual.has(viewName), true, `missing view ${viewName}`);
     }
   });
 

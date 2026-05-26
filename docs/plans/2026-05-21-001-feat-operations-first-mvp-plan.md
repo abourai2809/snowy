@@ -34,6 +34,8 @@ The manuals remain the source of truth for persona workflows. The current `index
 - Lab can record gelato production by batch/pan, assign pan IDs, and add those pans into lab inventory.
 - Lab dispatch is a separate workflow from production: staff select available lab inventory to move to stores based on store requirements, and the app adjusts remaining lab inventory automatically.
 - Store staff can accept incoming dispatches, record pan movement from backup to display, and submit end-of-day display freezer weights through a clear EOD gelato weight entry action.
+- End-of-day display weight submission automatically returns non-empty display pans to backup/deep-freezer inventory and closes zero-weight pans as depleted.
+- Admin can see backend-calculated empty pan totals by store.
 - When a pan is moved to display, staff must answer full or partial; partial requires weight.
 - Store supply counts are checklist-driven from the Admin catalog.
 - Attendance is MVP: staff check in/out daily; Admin can add/subtract staff, add bonus days, and control allowed holidays.
@@ -116,6 +118,7 @@ Operational data:
 - `display_movements`
 - `end_of_day_counts`
 - `end_of_day_count_items`
+- `store_empty_pan_counts` view
 - `inventory_adjustments`
 - `attendance_entries`
 - `attendance_adjustments`
@@ -140,6 +143,8 @@ flowchart TB
   Receive --> Backup["Backup deep freezer"]
   Backup --> Display["Move to display freezer"]
   Display --> EOD["End-of-day counts"]
+  EOD --> Return["Auto-return non-empty pans to backup"]
+  EOD --> Empty["Close zero-weight pans and count empties"]
   Catalog --> SupplyChecklist["Supply count checklist"]
   SupplyChecklist --> EOD
   Staff["Staff check in/out"] --> Attendance["Attendance roster"]
@@ -354,6 +359,9 @@ Work:
 - Partial display movement requires weight.
 - End-of-day count has a clearly findable EOD gelato weight entry action.
 - End-of-day count supports choosing display flavours/pans and entering weights, while preserving pan IDs where known.
+- Submitting EOD display weights automatically updates pan state: non-empty display pans become backup/received stock, zero-weight display pans become closed inactive empty pans.
+- Pan lifecycle changes create `pan_events` records so display movement, EOD return, and depletion can be audited later.
+- Store empty pan totals are calculated from closed zero-weight pan state and visible to Admin.
 - Store Manager can correct same-day store submissions.
 - Admin can correct historical store inventory records.
 
@@ -478,6 +486,39 @@ Dependencies:
 
 - Units 5 and 6 current implementation.
 
+### Unit 10: EOD Pan Lifecycle Automation And Empty Pan Counts
+
+Goal: Keep store reporting light while closing the inventory accounting loop after display pans are weighed at EOD.
+
+Files:
+
+- `src/features/store/storeApi.ts`
+- `src/features/store/deepFreezerApi.ts`
+- `src/features/store/EodGelatoCount.test.tsx`
+- `src/features/store/deepFreezerApi.test.ts`
+- `src/features/admin/reports/AdminReportsPage.tsx`
+- `supabase/migrations/202605260003_store_pan_lifecycle.sql`
+
+Work:
+
+- On EOD display submission, return each pan with weight greater than 0 kg to backup/deep-freezer stock at the same store.
+- On EOD display submission, close each pan with weight equal to 0 kg as depleted/empty and remove it from active gelato inventory.
+- Record pan lifecycle events for display movement, display return, and display depletion.
+- Include returned display weights in projected deep-freezer balances so store requirements are based on remaining backup gelato, not only outbound display movements.
+- Calculate empty pan totals per store from closed zero-weight pan records.
+- Do not add another required store-staff step for display-to-deep movement.
+
+Tests:
+
+- Non-empty EOD display pan returns to backup inventory with the submitted weight.
+- Zero-weight EOD display pan is closed and appears in the store empty-pan count.
+- Projected deep-freezer balances add returned display weight after EOD.
+- Store Manager same-day correction can still correct a pan after it has auto-returned to backup.
+
+Dependencies:
+
+- Unit 6.
+
 ## Dependency Graph
 
 ```mermaid
@@ -494,6 +535,8 @@ flowchart LR
   U3 --> U8
   U5 --> U9["Unit 9: Lab inventory dispatch split"]
   U6 --> U9
+  U6 --> U10["Unit 10: EOD pan lifecycle automation"]
+  U10 --> U8
 ```
 
 ## Implementation Notes
@@ -502,6 +545,8 @@ flowchart LR
 - Prefer scanner-ready pan ID fields later, but MVP can use typed pan IDs.
 - Store pan ID and batch ID separately. Pan ID is operational; batch ID supports traceability.
 - Use status/event records for pan movement instead of overwriting only the latest state.
+- Keep display-to-deep return implicit at EOD: staff enter closing weights once, and backend state changes handle return/depletion.
+- Treat detailed pan-to-pan consolidation/refill as deferred because it requires source and target pan IDs plus before/after weights and would add friction to store closing.
 - Use soft deactivation for catalog records so historical inventory remains valid.
 - Start with simple correction permissions, but store enough metadata to support a later audit trail.
 - Avoid writing QueueBuster credentials, service-role keys, or POS secrets into frontend code or Git.

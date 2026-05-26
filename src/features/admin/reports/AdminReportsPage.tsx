@@ -9,7 +9,7 @@ import { listAttendanceForDate } from "../../attendance/attendanceApi";
 import { listInventoryCounts } from "../../inventory/inventoryApi";
 import { listLabDispatches } from "../../lab/labApi";
 import { listDeepFreezerCounts, MORNING_VERIFICATION_TOLERANCE_KG } from "../../store/deepFreezerApi";
-import { listEodGelatoCounts, type EodCountWithItems } from "../../store/storeApi";
+import { listEmptyPanCountsByStore, listEodGelatoCounts, type EodCountWithItems, type StoreEmptyPanCount } from "../../store/storeApi";
 import { CorrectionsPage } from "../corrections/CorrectionsPage";
 import { EodGelatoCorrectionsPage } from "../corrections/EodGelatoCorrectionsPage";
 import { AdminDeepFreezerTools } from "./AdminDeepFreezerTools";
@@ -23,6 +23,7 @@ export function AdminReportsPage() {
   const [gelatoCounts, setGelatoCounts] = useState<EodCountWithItems[]>([]);
   const [morningChecks, setMorningChecks] = useState<DeepFreezerCountWithItems[]>([]);
   const [inventoryCounts, setInventoryCounts] = useState<InventoryCountWithItems[]>([]);
+  const [emptyPanCounts, setEmptyPanCounts] = useState<StoreEmptyPanCount[]>([]);
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -33,14 +34,16 @@ export function AdminReportsPage() {
       listEodGelatoCounts(),
       listDeepFreezerCounts("morning"),
       listInventoryCounts(),
+      listEmptyPanCountsByStore(),
       listAttendanceForDate(todayDate()),
       listStaff(),
     ])
-      .then(([dispatchRows, gelatoRows, morningRows, inventoryRows, attendanceRows, staffRows]) => {
+      .then(([dispatchRows, gelatoRows, morningRows, inventoryRows, emptyPanRows, attendanceRows, staffRows]) => {
         setDispatches(dispatchRows);
         setGelatoCounts(gelatoRows);
         setMorningChecks(morningRows);
         setInventoryCounts(inventoryRows);
+        setEmptyPanCounts(emptyPanRows);
         setAttendance(attendanceRows);
         setStaff(staffRows);
       })
@@ -110,6 +113,19 @@ export function AdminReportsPage() {
             title: count.locationId,
             detail: `${count.businessDate} / ${count.items.length} items`,
             badge: count.status,
+          }))}
+        />
+      </section>
+
+      <section className="card">
+        <div className="card-title">Empty pans</div>
+        {emptyPanCounts.length === 0 ? <p className="muted-copy">No empty pans recorded.</p> : null}
+        <ReportRows
+          rows={emptyPanCounts.map((count) => ({
+            id: count.locationId,
+            title: count.locationId,
+            detail: "Closed display pans at store",
+            badge: `${count.emptyPanCount}`,
           }))}
         />
       </section>
