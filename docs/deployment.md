@@ -15,6 +15,9 @@ Environment variables:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+`SUPABASE_SERVICE_ROLE_KEY` is used only by Vercel serverless functions, currently staff signup. Never expose it with a `VITE_` prefix and never commit it to Git.
 
 Use Vercel production deployment for the branch that should be used by staff. Preview deployments can be used for feature branches.
 

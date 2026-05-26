@@ -28,6 +28,8 @@ SUPABASE_DB_URL=...
 
 The anon key is safe to use in a frontend only when Row Level Security is correct. Keep it out of source code anyway so environments can change without editing code.
 
+`SUPABASE_SERVICE_ROLE_KEY` is required only for trusted backend contexts such as Vercel API routes and QueueBuster/background workers. It must not be added to frontend code, committed to Git, or exposed with a `VITE_` prefix.
+
 ## Install Or Run The Supabase CLI
 
 This machine did not have the Supabase CLI installed when MVP 1 started.

@@ -399,42 +399,27 @@ export async function requestStaffSignup(input: StaffSignupInput): Promise<Staff
     return stripPassword(created);
   }
 
-  const supabase = requireSupabaseClient();
-  const { data: authData, error: signupError } = await supabase.auth.signUp({
-    email: staffEmail(phone),
-    password: input.password,
-    options: {
-      data: {
-        name,
-        phone,
-        role: input.role,
-        defaultLocationId: input.defaultLocationId,
-      },
+  const response = await fetch("/api/staff-signup", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({
+      name,
+      phone,
+      password: input.password,
+      role: input.role,
+      defaultLocationId: input.defaultLocationId,
+    }),
   });
 
-  if (signupError) {
-    throw signupError;
+  const payload = (await response.json().catch(() => null)) as { staff?: StaffProfile; error?: string } | null;
+
+  if (!response.ok || !payload?.staff) {
+    throw new Error(payload?.error ?? "Unable to submit staff signup.");
   }
 
-  if (authData.session) {
-    await signOutStaff();
-  }
-
-  return {
-    id: authData.user?.id ?? phone,
-    authUserId: authData.user?.id ?? null,
-    name,
-    phone,
-    role: input.role,
-    defaultLocationId: input.defaultLocationId,
-    salaryAmount: null,
-    salaryType: "daily",
-    allowedHolidaysPerMonth: 0,
-    bonusDaysBalance: 0,
-    active: false,
-    signupStatus: "pending",
-  };
+  return payload.staff;
 }
 
 export async function saveStaff(input: StaffInput, staffId?: string): Promise<StaffProfile> {
