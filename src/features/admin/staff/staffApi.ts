@@ -262,22 +262,16 @@ export async function loginWithPhone(phone: string, password: string): Promise<S
   }
 
   const supabase = requireSupabaseClient();
-  let lastError: Error | null = null;
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    email: staffEmail(normalizedPhone),
+    password,
+  });
 
-  for (const email of staffAuthEmails(normalizedPhone)) {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (!authError) {
-      return getStaffProfileByAuthUserId(authData.user.id);
-    }
-
-    lastError = authError;
+  if (authError) {
+    throw authError;
   }
 
-  throw lastError ?? new Error("Unable to sign in.");
+  return getStaffProfileByAuthUserId(authData.user.id);
 }
 
 export async function signOutStaff() {
@@ -363,11 +357,7 @@ function normalizePhone(phone: string) {
 }
 
 function staffEmail(phone: string) {
-  return `${phone}@staff.snowyowlgelato.com`;
-}
-
-function staffAuthEmails(phone: string) {
-  return [staffEmail(phone), `${phone}@snowy-owl.internal`];
+  return `staff-${phone}@snowyowlgelato.com`;
 }
 
 export async function requestStaffSignup(input: StaffSignupInput): Promise<StaffProfile> {
