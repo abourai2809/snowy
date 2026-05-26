@@ -407,6 +407,8 @@ export async function requestStaffSignup(input: StaffSignupInput): Promise<Staff
       data: {
         name,
         phone,
+        role: input.role,
+        defaultLocationId: input.defaultLocationId,
       },
     },
   });
@@ -415,36 +417,24 @@ export async function requestStaffSignup(input: StaffSignupInput): Promise<Staff
     throw signupError;
   }
 
-  const authUserId = authData.user?.id;
-  if (!authUserId) {
-    throw new Error("Unable to create staff login.");
+  if (authData.session) {
+    await signOutStaff();
   }
 
-  const { data, error } = await supabase
-    .from("users")
-    .insert({
-      auth_user_id: authUserId,
-      name,
-      phone,
-      role: input.role,
-      default_location_id: input.defaultLocationId,
-      salary_amount: null,
-      salary_type: "daily",
-      allowed_holidays_per_month: 0,
-      active: false,
-      signup_status: "pending",
-      signup_requested_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-
-  await signOutStaff();
-
-  if (error) {
-    throw error;
-  }
-
-  return mapUserRow(data);
+  return {
+    id: authData.user?.id ?? phone,
+    authUserId: authData.user?.id ?? null,
+    name,
+    phone,
+    role: input.role,
+    defaultLocationId: input.defaultLocationId,
+    salaryAmount: null,
+    salaryType: "daily",
+    allowedHolidaysPerMonth: 0,
+    bonusDaysBalance: 0,
+    active: false,
+    signupStatus: "pending",
+  };
 }
 
 export async function saveStaff(input: StaffInput, staffId?: string): Promise<StaffProfile> {
