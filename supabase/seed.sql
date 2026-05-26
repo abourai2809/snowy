@@ -33,13 +33,23 @@ set name = excluded.name,
     active = true,
     updated_at = now();
 
-insert into public.users (name, phone, role, default_location_id, salary_amount, salary_type, allowed_holidays_per_month, active) values
-  ('Arjun Sharma', '9876543210', 'admin', null, 60000, 'monthly', 0, true),
-  ('Priya Mehta', '9812345678', 'store_manager', 'rajpur', 25000, 'monthly', 0, true),
-  ('Rahul Gupta', '9823456789', 'lab_manager', 'lab', 30000, 'monthly', 0, true),
-  ('Sneha Joshi', '9834567890', 'store_staff', 'malsi', 800, 'daily', 0, true),
-  ('Vikram Singh', '9845678901', 'lab_staff', 'lab', 700, 'daily', 0, true),
-  ('Meera Rawat', '9856789012', 'store_manager', 'mussoorie', 22000, 'monthly', 0, true)
+insert into public.users (
+  name,
+  phone,
+  role,
+  default_location_id,
+  salary_amount,
+  salary_type,
+  allowed_holidays_per_month,
+  active,
+  signup_status
+) values
+  ('Arjun Sharma', '9876543210', 'admin', null, 60000, 'monthly', 0, true, 'approved'),
+  ('Priya Mehta', '9812345678', 'store_manager', 'rajpur', 25000, 'monthly', 0, true, 'approved'),
+  ('Rahul Gupta', '9823456789', 'lab_manager', 'lab', 30000, 'monthly', 0, true, 'approved'),
+  ('Sneha Joshi', '9834567890', 'store_staff', 'malsi', 800, 'daily', 0, true, 'approved'),
+  ('Vikram Singh', '9845678901', 'lab_staff', 'lab', 700, 'daily', 0, true, 'approved'),
+  ('Meera Rawat', '9856789012', 'store_manager', 'mussoorie', 22000, 'monthly', 0, true, 'approved')
 on conflict (phone) do update
 set name = excluded.name,
     role = excluded.role,
@@ -47,6 +57,7 @@ set name = excluded.name,
     salary_amount = excluded.salary_amount,
     salary_type = excluded.salary_type,
     active = excluded.active,
+    signup_status = excluded.signup_status,
     updated_at = now();
 
 insert into public.holiday_policies (user_id, allowed_holidays_per_month, bonus_days_balance)

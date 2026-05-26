@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { APP_ROLES, ROLE_LABELS, type AppRole, type LocationOption, type SalaryType, type StaffProfile } from "../../../domain/roles";
 import {
+  approveStaffSignup,
   listLocations,
   listStaff,
+  rejectStaffSignup,
   saveStaff,
   setStaffActive,
   updateHolidaySettings,
@@ -84,6 +86,38 @@ export function StaffPage() {
       current.map((member) => (member.id === id ? { ...member, ...patch } : member)),
     );
   }
+
+  async function handleSignupApproval(member: StaffProfile) {
+    try {
+      await approveStaffSignup(member.id);
+      await refresh();
+    } catch (approvalError) {
+      setError(approvalError instanceof Error ? approvalError.message : "Unable to approve signup.");
+    }
+  }
+
+  async function handleSignupRejection(member: StaffProfile) {
+    try {
+      await rejectStaffSignup(member.id);
+      await refresh();
+    } catch (rejectionError) {
+      setError(rejectionError instanceof Error ? rejectionError.message : "Unable to reject signup.");
+    }
+  }
+
+  function locationName(locationId: string | null) {
+    if (!locationId) return "No default";
+    return locations.find((location) => location.id === locationId)?.name ?? locationId;
+  }
+
+  function statusLabel(member: StaffProfile) {
+    if (member.signupStatus === "pending") return "Pending approval";
+    if (member.signupStatus === "rejected") return "Rejected";
+    return member.active ? "Active" : "Disabled";
+  }
+
+  const pendingSignups = staff.filter((member) => member.signupStatus === "pending");
+  const roster = staff.filter((member) => member.signupStatus !== "pending");
 
   return (
     <div className="page-stack">
@@ -173,24 +207,61 @@ export function StaffPage() {
       </section>
 
       <section className="card">
-        <div className="card-title">Staff roster</div>
-        {loading ? <p className="muted-copy">Loading staff...</p> : null}
-        {error ? <div className="alert alert-danger">{error}</div> : null}
-        <div className="list-stack" aria-label="Staff roster">
-          {staff.map((member) => (
+        <div className="card-title">Pending signups</div>
+        {pendingSignups.length === 0 ? <p className="muted-copy">No signups need approval.</p> : null}
+        <div className="list-stack" aria-label="Pending signups">
+          {pendingSignups.map((member) => (
             <article className="staff-row" key={member.id}>
               <div className="staff-row__head">
                 <div>
                   <strong>{member.name}</strong>
                   <span>{ROLE_LABELS[member.role]}</span>
                 </div>
-                <button
-                  className={member.active ? "danger-button" : "secondary-button"}
-                  type="button"
-                  onClick={() => handleActiveChange(member, !member.active)}
-                >
-                  {member.active ? "Deactivate" : "Reactivate"}
+                <span className="status-pill">{statusLabel(member)}</span>
+              </div>
+              <div className="staff-meta">
+                <span>{member.phone}</span>
+                <span>{locationName(member.defaultLocationId)}</span>
+              </div>
+              <div className="row-actions">
+                <button className="primary-button" type="button" onClick={() => handleSignupApproval(member)}>
+                  Approve
                 </button>
+                <button className="danger-button" type="button" onClick={() => handleSignupRejection(member)}>
+                  Reject
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-title">Staff roster</div>
+        {loading ? <p className="muted-copy">Loading staff...</p> : null}
+        {error ? <div className="alert alert-danger">{error}</div> : null}
+        <div className="list-stack" aria-label="Staff roster">
+          {roster.map((member) => (
+            <article className="staff-row" key={member.id}>
+              <div className="staff-row__head">
+                <div>
+                  <strong>{member.name}</strong>
+                  <span>{ROLE_LABELS[member.role]}</span>
+                </div>
+                <div className="staff-row__status">
+                  <span className="status-pill">{statusLabel(member)}</span>
+                  <button
+                    className={member.active ? "danger-button" : "secondary-button"}
+                    type="button"
+                    onClick={() => handleActiveChange(member, !member.active)}
+                  >
+                    {member.active ? "Deactivate" : "Reactivate"}
+                  </button>
+                </div>
+              </div>
+              <div className="staff-meta">
+                <span>{member.phone}</span>
+                <span>{locationName(member.defaultLocationId)}</span>
               </div>
 
               <div className="compact-grid">

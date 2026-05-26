@@ -462,6 +462,11 @@ button {
   opacity: 0.52;
 }
 
+.full-width-button {
+  width: 100%;
+  margin-top: 8px;
+}
+
 .demo-note,
 .muted-copy {
   margin: 10px 0 0;
@@ -599,6 +604,45 @@ button {
   gap: 9px;
 }
 
+.staff-row__status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.staff-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.staff-meta span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--pkll);
+}
+
+.status-pill {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--tlll);
+  color: var(--tldd);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .access-panel p {
   margin: 0;
   color: var(--muted);
@@ -661,8 +705,10 @@ button {
   gap: 6px;
 }
 
+.row-actions .primary-button,
 .row-actions .secondary-button,
 .row-actions .danger-button {
+  width: auto;
   min-height: 32px;
   padding: 0 9px;
   font-size: 10px;

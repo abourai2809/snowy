@@ -172,9 +172,14 @@ create table public.users (
   salary_type public.salary_type,
   allowed_holidays_per_month integer not null default 0,
   active boolean not null default true,
+  signup_status text not null default 'approved',
+  signup_requested_at timestamptz,
+  approved_at timestamptz,
+  rejected_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint users_phone_digits check (phone is null or phone ~ '^[0-9]{10}$')
+  constraint users_phone_digits check (phone is null or phone ~ '^[0-9]{10}$'),
+  constraint users_signup_status_check check (signup_status in ('approved', 'pending', 'rejected'))
 );
 
 create table public.holiday_policies (
@@ -829,6 +834,9 @@ on public.roles for select to authenticated using (true);
 create policy "locations readable by authenticated users"
 on public.locations for select to authenticated using (active = true or public.is_admin());
 
+create policy "locations readable for signup"
+on public.locations for select to anon using (active = true);
+
 create policy "locations managed by admin"
 on public.locations for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
@@ -839,6 +847,15 @@ using (auth_user_id = auth.uid() or public.is_admin());
 create policy "users managed by admin"
 on public.users for all to authenticated
 using (public.is_admin()) with check (public.is_admin());
+
+create policy "users can request staff signup"
+on public.users for insert to authenticated
+with check (
+  auth_user_id = auth.uid()
+  and active = false
+  and signup_status = 'pending'
+  and role <> 'admin'::public.app_role
+);
 
 create policy "holiday policies read self or admin"
 on public.holiday_policies for select to authenticated

@@ -9,6 +9,7 @@ export const APP_ROLES = [
 export type AppRole = (typeof APP_ROLES)[number];
 
 export type SalaryType = "monthly" | "daily";
+export type StaffSignupStatus = "approved" | "pending" | "rejected";
 
 export interface LocationOption {
   id: string;
@@ -34,6 +35,7 @@ export interface StaffProfile {
   allowedHolidaysPerMonth: number;
   bonusDaysBalance: number;
   active: boolean;
+  signupStatus?: StaffSignupStatus;
 }
 
 export const ROLE_LABELS: Record<AppRole, string> = {

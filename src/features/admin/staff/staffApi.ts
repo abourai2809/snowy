@@ -1,5 +1,11 @@
 import { isSupabaseConfigured, requireSupabaseClient } from "../../../lib/supabase";
-import type { AppRole, LocationOption, SalaryType, StaffProfile } from "../../../domain/roles";
+import type {
+  AppRole,
+  LocationOption,
+  SalaryType,
+  StaffProfile,
+  StaffSignupStatus,
+} from "../../../domain/roles";
 
 interface DemoStaffProfile extends StaffProfile {
   password: string;
@@ -61,6 +67,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
+    signupStatus: "approved",
     password: "admin123",
   },
   {
@@ -74,6 +81,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
+    signupStatus: "approved",
     password: "pass123",
   },
   {
@@ -87,6 +95,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
+    signupStatus: "approved",
     password: "pass123",
   },
   {
@@ -100,6 +109,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
+    signupStatus: "approved",
     password: "pass123",
   },
   {
@@ -113,6 +123,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
+    signupStatus: "approved",
     password: "pass123",
   },
   {
@@ -126,6 +137,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
+    signupStatus: "approved",
     password: "pass123",
   },
 ];
@@ -154,6 +166,7 @@ function mapUserRow(row: Record<string, unknown>, bonusDaysBalance = 0): StaffPr
     allowedHolidaysPerMonth: Number(row.allowed_holidays_per_month ?? 0),
     bonusDaysBalance,
     active: Boolean(row.active),
+    signupStatus: (row.signup_status ?? "approved") as StaffSignupStatus,
   };
 }
 
@@ -162,7 +175,6 @@ async function getStaffProfileByAuthUserId(authUserId: string): Promise<StaffPro
     .from("users")
     .select("*, holiday_policies(bonus_days_balance)")
     .eq("auth_user_id", authUserId)
-    .eq("active", true)
     .maybeSingle();
 
   if (error) {
@@ -171,11 +183,28 @@ async function getStaffProfileByAuthUserId(authUserId: string): Promise<StaffPro
 
   if (!data) {
     await signOutStaff();
-    throw new Error("Signed-in account is not active in Snowy Owl Operations.");
+    throw new Error("Signed-in account is not registered in Snowy Owl Operations.");
   }
 
   const policies = data.holiday_policies as Array<{ bonus_days_balance?: number }> | null;
-  return mapUserRow(data, Number(policies?.[0]?.bonus_days_balance ?? 0));
+  const profile = mapUserRow(data, Number(policies?.[0]?.bonus_days_balance ?? 0));
+
+  if (profile.signupStatus === "pending") {
+    await signOutStaff();
+    throw new Error("Signup is waiting for Admin approval.");
+  }
+
+  if (profile.signupStatus === "rejected") {
+    await signOutStaff();
+    throw new Error("Signup was rejected. Ask Admin to review your access.");
+  }
+
+  if (!profile.active) {
+    await signOutStaff();
+    throw new Error("Signed-in account is disabled in Snowy Owl Operations.");
+  }
+
+  return profile;
 }
 
 export function resetDemoStaffData() {
@@ -209,10 +238,22 @@ export async function getCurrentStaffProfile(): Promise<StaffProfile | null> {
 
 export async function loginWithPhone(phone: string, password: string): Promise<StaffProfile> {
   if (!isSupabaseConfigured) {
-    const member = demoStaff.find((staff) => staff.phone === phone && staff.active);
+    const member = demoStaff.find((staff) => staff.phone === phone);
 
     if (!member || member.password !== password) {
       throw new Error("Invalid phone or password.");
+    }
+
+    if (member.signupStatus === "pending") {
+      throw new Error("Signup is waiting for Admin approval.");
+    }
+
+    if (member.signupStatus === "rejected") {
+      throw new Error("Signup was rejected. Ask Admin to review your access.");
+    }
+
+    if (!member.active) {
+      throw new Error("Signed-in account is disabled in Snowy Owl Operations.");
     }
 
     return stripPassword(member);
@@ -301,6 +342,109 @@ export interface StaffInput {
   bonusDaysBalance: number;
 }
 
+export interface StaffSignupInput {
+  name: string;
+  phone: string;
+  password: string;
+  role: Exclude<AppRole, "admin">;
+  defaultLocationId: string | null;
+}
+
+function normalizePhone(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
+function staffEmail(phone: string) {
+  return `${phone}@snowy-owl.internal`;
+}
+
+export async function requestStaffSignup(input: StaffSignupInput): Promise<StaffProfile> {
+  const phone = normalizePhone(input.phone);
+  const name = input.name.trim();
+
+  if (!name) {
+    throw new Error("Enter the staff member's name.");
+  }
+
+  if (phone.length !== 10) {
+    throw new Error("Enter a 10-digit mobile number.");
+  }
+
+  if (input.password.length < 6) {
+    throw new Error("Password must be at least 6 characters.");
+  }
+
+  if (!isSupabaseConfigured) {
+    if (demoStaff.some((staff) => staff.phone === phone)) {
+      throw new Error("A staff member with this phone already exists.");
+    }
+
+    const created: DemoStaffProfile = {
+      id: `staff-signup-${Date.now()}`,
+      name,
+      phone,
+      role: input.role,
+      defaultLocationId: input.defaultLocationId,
+      salaryAmount: null,
+      salaryType: "daily",
+      allowedHolidaysPerMonth: 0,
+      bonusDaysBalance: 0,
+      active: false,
+      signupStatus: "pending",
+      password: input.password,
+    };
+    demoStaff.push(created);
+    return stripPassword(created);
+  }
+
+  const supabase = requireSupabaseClient();
+  const { data: authData, error: signupError } = await supabase.auth.signUp({
+    email: staffEmail(phone),
+    password: input.password,
+    options: {
+      data: {
+        name,
+        phone,
+      },
+    },
+  });
+
+  if (signupError) {
+    throw signupError;
+  }
+
+  const authUserId = authData.user?.id;
+  if (!authUserId) {
+    throw new Error("Unable to create staff login.");
+  }
+
+  const { data, error } = await supabase
+    .from("users")
+    .insert({
+      auth_user_id: authUserId,
+      name,
+      phone,
+      role: input.role,
+      default_location_id: input.defaultLocationId,
+      salary_amount: null,
+      salary_type: "daily",
+      allowed_holidays_per_month: 0,
+      active: false,
+      signup_status: "pending",
+      signup_requested_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  await signOutStaff();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapUserRow(data);
+}
+
 export async function saveStaff(input: StaffInput, staffId?: string): Promise<StaffProfile> {
   if (!isSupabaseConfigured) {
     if (staffId) {
@@ -321,6 +465,7 @@ export async function saveStaff(input: StaffInput, staffId?: string): Promise<St
       ...input,
       id: `staff-${Date.now()}`,
       active: true,
+      signupStatus: "approved",
       password: "pass123",
     };
     demoStaff.push(created);
@@ -335,6 +480,7 @@ export async function saveStaff(input: StaffInput, staffId?: string): Promise<St
     salary_amount: input.salaryAmount,
     salary_type: input.salaryType,
     allowed_holidays_per_month: input.allowedHolidaysPerMonth,
+    signup_status: "approved",
   };
 
   const query = staffId
@@ -358,10 +504,72 @@ export async function setStaffActive(staffId: string, active: boolean): Promise<
     }
 
     existing.active = active;
+    if (active && existing.signupStatus !== "approved") {
+      existing.signupStatus = "approved";
+    }
     return;
   }
 
-  const { error } = await requireSupabaseClient().from("users").update({ active }).eq("id", staffId);
+  const { error } = await requireSupabaseClient()
+    .from("users")
+    .update({
+      active,
+      ...(active ? { signup_status: "approved", approved_at: new Date().toISOString(), rejected_at: null } : {}),
+    })
+    .eq("id", staffId);
+  if (error) {
+    throw error;
+  }
+}
+
+export async function approveStaffSignup(staffId: string): Promise<void> {
+  if (!isSupabaseConfigured) {
+    const existing = demoStaff.find((staff) => staff.id === staffId);
+    if (!existing) {
+      throw new Error("Staff member not found.");
+    }
+
+    existing.active = true;
+    existing.signupStatus = "approved";
+    return;
+  }
+
+  const { error } = await requireSupabaseClient()
+    .from("users")
+    .update({
+      active: true,
+      signup_status: "approved",
+      approved_at: new Date().toISOString(),
+      rejected_at: null,
+    })
+    .eq("id", staffId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function rejectStaffSignup(staffId: string): Promise<void> {
+  if (!isSupabaseConfigured) {
+    const existing = demoStaff.find((staff) => staff.id === staffId);
+    if (!existing) {
+      throw new Error("Staff member not found.");
+    }
+
+    existing.active = false;
+    existing.signupStatus = "rejected";
+    return;
+  }
+
+  const { error } = await requireSupabaseClient()
+    .from("users")
+    .update({
+      active: false,
+      signup_status: "rejected",
+      rejected_at: new Date().toISOString(),
+    })
+    .eq("id", staffId);
+
   if (error) {
     throw error;
   }

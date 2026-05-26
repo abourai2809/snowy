@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { App } from "../../../app/App";
 import { resetDemoAttendanceData } from "../../attendance/attendanceApi";
 import { renderApp, screen, userEvent, waitFor, within } from "../../../test/render";
-import { resetDemoStaffData } from "./staffApi";
+import { loginWithPhone, requestStaffSignup, resetDemoStaffData } from "./staffApi";
 
 describe("StaffPage", () => {
   beforeEach(() => {
@@ -44,5 +44,36 @@ describe("StaffPage", () => {
 
     expect(screen.queryByRole("button", { name: "Staff" })).not.toBeInTheDocument();
     expect(screen.queryByText("Staff roster")).not.toBeInTheDocument();
+  });
+
+  it("lets Admin approve a staff signup before the staff member can log in", async () => {
+    const user = userEvent.setup();
+
+    await requestStaffSignup({
+      name: "Pending Counter Staff",
+      phone: "9000002222",
+      password: "secret1",
+      role: "store_staff",
+      defaultLocationId: "rajpur",
+    });
+
+    await expect(loginWithPhone("9000002222", "secret1")).rejects.toThrow("Signup is waiting for Admin approval.");
+
+    renderApp(<App initialRole="admin" />);
+    await user.click(screen.getByRole("button", { name: "Staff" }));
+
+    const pendingRowText = await screen.findByText("Pending Counter Staff");
+    const pendingRow = pendingRowText.closest("article");
+    expect(pendingRow).not.toBeNull();
+    expect(within(pendingRow as HTMLElement).getByText("Pending approval")).toBeInTheDocument();
+
+    await user.click(within(pendingRow as HTMLElement).getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => expect(screen.queryByText("Pending approval")).not.toBeInTheDocument());
+    await expect(loginWithPhone("9000002222", "secret1")).resolves.toMatchObject({
+      name: "Pending Counter Staff",
+      active: true,
+      signupStatus: "approved",
+    });
   });
 });
