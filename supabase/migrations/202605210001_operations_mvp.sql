@@ -122,6 +122,17 @@ create type public.queuebuster_job_status as enum (
   'failed',
   'cancelled'
 );
+create type public.archive_manifest_status as enum (
+  'dry_run',
+  'planned',
+  'uploaded',
+  'verified',
+  'delete_ready',
+  'deleted',
+  'failed',
+  'cancelled'
+);
+create type public.archive_manifest_mode as enum ('dry_run', 'live');
 
 create table public.roles (
   id public.app_role primary key,
@@ -532,6 +543,64 @@ create table public.queuebuster_job_events (
   created_at timestamptz not null default now()
 );
 
+create table public.archive_manifests (
+  id uuid primary key default gen_random_uuid(),
+  run_id text not null,
+  environment text not null,
+  mode public.archive_manifest_mode not null default 'dry_run',
+  status public.archive_manifest_status not null default 'dry_run',
+  window_start date not null,
+  window_end date not null,
+  candidate_source_count integer not null default 0,
+  candidate_row_count bigint not null default 0,
+  manifest_payload jsonb not null default '{}'::jsonb,
+  manifest_local_path text,
+  drive_folder_id text,
+  drive_file_id text,
+  checksum_sha256 text,
+  code_version text,
+  created_by uuid references public.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint archive_manifests_run_id_unique unique (run_id),
+  constraint archive_manifests_window_valid check (window_end > window_start),
+  constraint archive_manifests_source_count_nonnegative check (candidate_source_count >= 0),
+  constraint archive_manifests_row_count_nonnegative check (candidate_row_count >= 0)
+);
+
+create table public.archive_files (
+  id uuid primary key default gen_random_uuid(),
+  manifest_id uuid not null references public.archive_manifests(id) on delete cascade,
+  source_table text not null,
+  source_kind text not null default 'database_table',
+  retention_class text not null,
+  window_start date not null,
+  window_end date not null,
+  date_column text not null,
+  predicate text not null,
+  row_count bigint not null default 0,
+  primary_key_hash text,
+  schema_hash text,
+  destination_provider text not null default 'google_drive',
+  drive_folder_id text,
+  drive_file_id text,
+  drive_file_name text,
+  byte_size bigint,
+  sha256 text,
+  verification_status text not null default 'not_uploaded',
+  deletion_status text not null default 'not_started',
+  deleted_row_count bigint,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint archive_files_window_valid check (window_end > window_start),
+  constraint archive_files_row_count_nonnegative check (row_count >= 0),
+  constraint archive_files_byte_size_nonnegative check (byte_size is null or byte_size >= 0),
+  constraint archive_files_deleted_row_count_nonnegative check (
+    deleted_row_count is null or deleted_row_count >= 0
+  )
+);
+
 create index users_auth_user_id_idx on public.users(auth_user_id);
 create index users_role_idx on public.users(role);
 create index catalog_items_scope_idx on public.catalog_items(scope);
@@ -547,6 +616,9 @@ create index urgent_requirement_events_requirement_idx on public.urgent_requirem
 create index queuebuster_jobs_status_created_idx on public.queuebuster_jobs(status, created_at);
 create index queuebuster_jobs_type_created_idx on public.queuebuster_jobs(job_type, created_at desc);
 create index queuebuster_job_events_job_idx on public.queuebuster_job_events(queuebuster_job_id, created_at);
+create index archive_manifests_window_idx on public.archive_manifests(environment, window_start, window_end);
+create index archive_files_manifest_idx on public.archive_files(manifest_id);
+create index archive_files_source_window_idx on public.archive_files(source_table, window_start, window_end);
 
 create or replace function public.current_app_user_id()
 returns uuid
@@ -748,6 +820,8 @@ alter table public.urgent_requirements enable row level security;
 alter table public.urgent_requirement_events enable row level security;
 alter table public.queuebuster_jobs enable row level security;
 alter table public.queuebuster_job_events enable row level security;
+alter table public.archive_manifests enable row level security;
+alter table public.archive_files enable row level security;
 
 create policy "roles readable by authenticated users"
 on public.roles for select to authenticated using (true);
@@ -1000,6 +1074,24 @@ using (public.is_admin());
 
 create policy "queuebuster job events created by admin"
 on public.queuebuster_job_events for insert to authenticated
+with check (public.is_admin());
+
+create policy "archive manifests readable by admin"
+on public.archive_manifests for select to authenticated
+using (public.is_admin());
+
+create policy "archive manifests managed by admin"
+on public.archive_manifests for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+create policy "archive files readable by admin"
+on public.archive_files for select to authenticated
+using (public.is_admin());
+
+create policy "archive files managed by admin"
+on public.archive_files for all to authenticated
+using (public.is_admin())
 with check (public.is_admin());
 
 grant usage on schema public to authenticated;

@@ -152,6 +152,8 @@ The manifest must include:
 
 Store manifest metadata in Supabase forever in future archive tables such as `archive_manifests` and `archive_files`. The Drive manifest file is the immutable cold-storage proof; the Supabase manifest rows are the searchable index.
 
+The first implementation slice is dry-run only. Use `npm run archive:dry-run` on a backend machine or VM to generate a local manifest for a closed calendar month. That script reads Supabase through the service-role key, can optionally record the dry-run manifest in `archive_manifests` and `archive_files`, and never uploads to Drive or deletes rows. Operational instructions are in [archive-dry-run.md](../archive-dry-run.md).
+
 ## Summaries That Stay in Supabase
 
 Before deleting any recent-window rows, write summary rows that preserve operational reporting:
