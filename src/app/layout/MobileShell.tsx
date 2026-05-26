@@ -28,10 +28,12 @@ export function MobileShell({
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="brand-lockup" aria-label="Snowy Owl Operations">
-          <div className="brand-mark">SO</div>
+        <div className="brand-lockup" aria-label="Snowy Owl Gelato Co Operations">
+          <div className="brand-mark">
+            <img src="/snowy-owl-logo.png" alt="" />
+          </div>
           <div>
-            <p className="brand-title">Snowy Owl</p>
+            <p className="brand-title">Snowy Owl Gelato Co</p>
             <p className="brand-subtitle">Operations</p>
           </div>
         </div>

@@ -86,6 +86,7 @@ button {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex: 1;
 }
 
 .brand-mark {
@@ -94,11 +95,16 @@ button {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--pkd);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  border: 2px solid rgba(255, 255, 255, 0.28);
+  overflow: hidden;
+  background: var(--tlll);
+  border: 2px solid rgba(255, 255, 255, 0.38);
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .brand-title,
@@ -112,10 +118,11 @@ button {
 .brand-title {
   color: #fff;
   font-family: var(--serif);
-  font-size: 20px;
+  font-size: 17px;
   font-style: italic;
   font-weight: 800;
   line-height: 1.1;
+  max-width: 150px;
 }
 
 .brand-subtitle,
@@ -146,6 +153,7 @@ button {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
 }
 
 .logout-button {
@@ -157,6 +165,44 @@ button {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 14px;
+}
+
+.setting-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.setting-row strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.setting-row span {
+  color: var(--muted);
+}
+
+.switch-field {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--pkd);
+  font-weight: 800;
+}
+
+.switch-field input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--pkd);
 }
 
 .app-main {

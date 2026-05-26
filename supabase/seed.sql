@@ -33,6 +33,14 @@ set name = excluded.name,
     active = true,
     updated_at = now();
 
+insert into public.app_settings (key, value, description)
+values (
+  'location_check_in_required',
+  'true'::jsonb,
+  'When true, attendance check-in and check-out require browser geolocation verification.'
+)
+on conflict (key) do nothing;
+
 insert into public.users (
   name,
   phone,
@@ -44,12 +52,7 @@ insert into public.users (
   active,
   signup_status
 ) values
-  ('Arjun Sharma', '9876543210', 'admin', null, 60000, 'monthly', 0, true, 'approved'),
-  ('Priya Mehta', '9812345678', 'store_manager', 'rajpur', 25000, 'monthly', 0, true, 'approved'),
-  ('Rahul Gupta', '9823456789', 'lab_manager', 'lab', 30000, 'monthly', 0, true, 'approved'),
-  ('Sneha Joshi', '9834567890', 'store_staff', 'malsi', 800, 'daily', 0, true, 'approved'),
-  ('Vikram Singh', '9845678901', 'lab_staff', 'lab', 700, 'daily', 0, true, 'approved'),
-  ('Meera Rawat', '9856789012', 'store_manager', 'mussoorie', 22000, 'monthly', 0, true, 'approved')
+  ('Arjun Sharma', '9876543210', 'admin', null, 60000, 'monthly', 0, true, 'approved')
 on conflict (phone) do update
 set name = excluded.name,
     role = excluded.role,

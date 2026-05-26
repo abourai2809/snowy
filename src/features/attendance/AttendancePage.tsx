@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { checkIn, checkOut, getActiveAttendance, listAttendanceForDate, listTodayAttendanceForUser } from "./attendanceApi";
 import { collectVerifiedAttendanceLocation } from "./locationEvidence";
 import { listLocations, listStaff } from "../admin/staff/staffApi";
+import { getOperationsSettings, type OperationsSettings } from "../settings/operationsSettingsApi";
 
 export function AttendancePage() {
   const { profile, refreshActiveAttendance } = useAuth();
@@ -14,6 +15,7 @@ export function AttendancePage() {
   const [roster, setRoster] = useState<AttendanceEntry[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [settings, setSettings] = useState<OperationsSettings | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,7 @@ export function AttendancePage() {
   const statusEntry = activeEntry ?? latestEntry;
   const todayHours = todayEntries.reduce((total, entry) => total + (entry.hours ?? 0), 0);
   const selectedLocation = selectedLocationId ? locationById.get(selectedLocationId) ?? null : null;
+  const locationCheckInRequired = settings?.locationCheckInRequired ?? true;
 
   useEffect(() => {
     let active = true;
@@ -52,12 +55,13 @@ export function AttendancePage() {
 
       setLoading(true);
       try {
-        const [entry, entryRows, rosterRows, staffRows, locationRows] = await Promise.all([
+        const [entry, entryRows, rosterRows, staffRows, locationRows, operationsSettings] = await Promise.all([
           getActiveAttendance(profile.id),
           listTodayAttendanceForUser(profile.id),
           profile.role === "admin" ? listAttendanceForDate() : Promise.resolve([]),
           profile.role === "admin" ? listStaff() : Promise.resolve([]),
           listLocations(),
+          getOperationsSettings(),
         ]);
 
         if (active) {
@@ -66,6 +70,7 @@ export function AttendancePage() {
           setRoster(rosterRows);
           setStaff(staffRows);
           setLocations(locationRows);
+          setSettings(operationsSettings);
           setSelectedLocationId(entry?.locationId ?? entryRows.at(-1)?.locationId ?? profile.defaultLocationId ?? "");
           setError(null);
         }
@@ -115,7 +120,9 @@ export function AttendancePage() {
       }
 
       setSubmittingAction("check-in");
-      const locationEvidence = await collectVerifiedAttendanceLocation(selectedLocation);
+      const locationEvidence = locationCheckInRequired
+        ? await collectVerifiedAttendanceLocation(selectedLocation)
+        : null;
       const entry = await checkIn(profile, selectedLocationId, new Date(), locationEvidence);
       setActiveEntry(entry);
       setTodayEntries((current) => [...current, entry]);
@@ -140,7 +147,9 @@ export function AttendancePage() {
       }
 
       setSubmittingAction("check-out");
-      const locationEvidence = await collectVerifiedAttendanceLocation(activeLocation);
+      const locationEvidence = locationCheckInRequired
+        ? await collectVerifiedAttendanceLocation(activeLocation)
+        : null;
       const entry = await checkOut(activeEntry, new Date(), locationEvidence);
       setActiveEntry(null);
       setTodayEntries((current) => current.map((item) => item.id === entry.id ? entry : item));
@@ -163,10 +172,13 @@ export function AttendancePage() {
         <div className="card-title">Today</div>
         {loading ? <p className="muted-copy">Loading attendance...</p> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
-        {submittingAction ? (
+        {submittingAction && locationCheckInRequired ? (
           <p className="muted-copy">
             Checking location before {submittingAction === "check-in" ? "check in" : "check out"}...
           </p>
+        ) : null}
+        {!locationCheckInRequired ? (
+          <p className="muted-copy">Location verification is off. Choose the work location before marking attendance.</p>
         ) : null}
 
         <div className="attendance-state">

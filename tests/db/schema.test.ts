@@ -42,6 +42,7 @@ const expectedTables = [
   "queuebuster_job_events",
   "archive_manifests",
   "archive_files",
+  "app_settings",
 ];
 
 const expectedEnums = [

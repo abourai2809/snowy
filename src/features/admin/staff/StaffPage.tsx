@@ -11,6 +11,11 @@ import {
   updateHolidaySettings,
   type StaffInput,
 } from "./staffApi";
+import {
+  getOperationsSettings,
+  updateLocationCheckInRequired,
+  type OperationsSettings,
+} from "../../settings/operationsSettingsApi";
 
 const emptyForm: StaffInput = {
   name: "",
@@ -26,16 +31,25 @@ const emptyForm: StaffInput = {
 export function StaffPage() {
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [settings, setSettings] = useState<OperationsSettings | null>(null);
+  const [locationCheckInRequired, setLocationCheckInRequired] = useState(true);
   const [form, setForm] = useState<StaffInput>(emptyForm);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function refresh() {
     setLoading(true);
     try {
-      const [staffRows, locationRows] = await Promise.all([listStaff(), listLocations()]);
+      const [staffRows, locationRows, settingsRow] = await Promise.all([
+        listStaff(),
+        listLocations(),
+        getOperationsSettings(),
+      ]);
       setStaff(staffRows);
       setLocations(locationRows);
+      setSettings(settingsRow);
+      setLocationCheckInRequired(settingsRow.locationCheckInRequired);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load staff.");
@@ -57,9 +71,22 @@ export function StaffPage() {
     try {
       await saveStaff(form);
       setForm(emptyForm);
+      setMessage("Staff member added.");
       await refresh();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save staff.");
+    }
+  }
+
+  async function handleLocationSettingSave() {
+    try {
+      const updated = await updateLocationCheckInRequired(locationCheckInRequired);
+      setSettings(updated);
+      setLocationCheckInRequired(updated.locationCheckInRequired);
+      setMessage("Attendance location setting saved.");
+      setError(null);
+    } catch (settingsError) {
+      setError(settingsError instanceof Error ? settingsError.message : "Unable to update attendance setting.");
     }
   }
 
@@ -121,6 +148,34 @@ export function StaffPage() {
 
   return (
     <div className="page-stack">
+      <section className="card">
+        <div className="card-title">Attendance controls</div>
+        {message ? <div className="alert alert-success">{message}</div> : null}
+        <div className="setting-row">
+          <div>
+            <strong>Location-based check-in</strong>
+            <span>Require phone location verification for check-in and check-out.</span>
+          </div>
+          <label className="switch-field">
+            <input
+              aria-label="Location-based check-in"
+              type="checkbox"
+              checked={locationCheckInRequired}
+              onChange={(event) => setLocationCheckInRequired(event.target.checked)}
+            />
+            <span>{locationCheckInRequired ? "On" : "Off"}</span>
+          </label>
+        </div>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={settings?.locationCheckInRequired === locationCheckInRequired}
+          onClick={handleLocationSettingSave}
+        >
+          Save attendance setting
+        </button>
+      </section>
+
       <section className="card">
         <div className="card-title">Add staff</div>
         <form className="staff-form" aria-label="Add staff form" onSubmit={handleSubmit}>

@@ -3,6 +3,7 @@ import { renderApp, screen, userEvent, waitFor } from "../../test/render";
 import { App } from "../../app/App";
 import { resetDemoStaffData } from "../admin/staff/staffApi";
 import { resetDemoAttendanceData } from "./attendanceApi";
+import { resetDemoOperationsSettings, updateLocationCheckInRequired } from "../settings/operationsSettingsApi";
 import { listFlavours, resetDemoCatalogData } from "../catalog/catalogApi";
 import { createDispatch, createProduction, resetDemoLabData } from "../lab/labApi";
 import { resetDemoStoreData } from "../store/storeApi";
@@ -11,6 +12,7 @@ describe("AttendancePage", () => {
   beforeEach(() => {
     resetDemoStaffData();
     resetDemoAttendanceData();
+    resetDemoOperationsSettings();
     resetDemoCatalogData();
     resetDemoLabData();
     resetDemoStoreData();
@@ -93,6 +95,19 @@ describe("AttendancePage", () => {
 
     expect(await screen.findByText(/Location permission was denied/)).toBeInTheDocument();
     expect(screen.getByText("Not checked in")).toBeInTheDocument();
+  });
+
+  it("lets staff check in when Admin turns location verification off", async () => {
+    const user = userEvent.setup();
+    mockDeviceLocationError(deniedLocationError());
+    await updateLocationCheckInRequired(false);
+
+    renderApp(<App initialRole="store_staff" />);
+    await user.click(screen.getByRole("button", { name: "Attendance" }));
+    await user.click(await screen.findByRole("button", { name: "Check in" }));
+
+    expect(await screen.findByText("Checked in")).toBeInTheDocument();
+    expect(screen.getByText(/Location verification is off/)).toBeInTheDocument();
   });
 });
 

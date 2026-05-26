@@ -27,7 +27,7 @@ describe("MobileShell", () => {
       </MobileShell>,
     );
 
-    expect(screen.getByRole("banner")).toHaveTextContent("Snowy Owl");
+    expect(screen.getByRole("banner")).toHaveTextContent("Snowy Owl Gelato Co");
     expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Catalog" })).toBeInTheDocument();
   });

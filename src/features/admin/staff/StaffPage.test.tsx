@@ -3,11 +3,13 @@ import { App } from "../../../app/App";
 import { resetDemoAttendanceData } from "../../attendance/attendanceApi";
 import { renderApp, screen, userEvent, waitFor, within } from "../../../test/render";
 import { loginWithPhone, requestStaffSignup, resetDemoStaffData } from "./staffApi";
+import { getOperationsSettings, resetDemoOperationsSettings } from "../../settings/operationsSettingsApi";
 
 describe("StaffPage", () => {
   beforeEach(() => {
     resetDemoStaffData();
     resetDemoAttendanceData();
+    resetDemoOperationsSettings();
   });
 
   it("lets Admin add staff and update holiday settings", async () => {
@@ -44,6 +46,23 @@ describe("StaffPage", () => {
 
     expect(screen.queryByRole("button", { name: "Staff" })).not.toBeInTheDocument();
     expect(screen.queryByText("Staff roster")).not.toBeInTheDocument();
+  });
+
+  it("lets Admin turn location-based check-in off", async () => {
+    const user = userEvent.setup();
+
+    renderApp(<App initialRole="admin" />);
+    await user.click(screen.getByRole("button", { name: "Staff" }));
+
+    const toggle = await screen.findByLabelText("Location-based check-in");
+    expect(toggle).toBeChecked();
+
+    await user.click(toggle);
+    await user.click(screen.getByRole("button", { name: "Save attendance setting" }));
+
+    await waitFor(async () => {
+      await expect(getOperationsSettings()).resolves.toMatchObject({ locationCheckInRequired: false });
+    });
   });
 
   it("lets Admin approve a staff signup before the staff member can log in", async () => {
