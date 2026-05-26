@@ -8,6 +8,7 @@
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
+    "worker:queuebuster": "node scripts/queuebuster-worker.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

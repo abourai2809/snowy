@@ -35,3 +35,7 @@ VITE_SUPABASE_ANON_KEY=
 ```
 
 Apply the baseline schema and seed data from `supabase/migrations` and `supabase/seed.sql`. Do not commit Supabase service-role keys, QueueBuster credentials, or local login tokens.
+
+## QueueBuster Worker
+
+QueueBuster jobs are created from the Admin Catalog page and executed by a backend worker, not by frontend code. See `docs/queuebuster-worker.md` for the worker environment, allowlisted command contract, and dry-run mode.
