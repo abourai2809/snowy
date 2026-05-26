@@ -2,6 +2,7 @@ create table if not exists public.store_deep_freezer_counts (
   id uuid primary key default gen_random_uuid(),
   location_id text not null references public.locations(id),
   business_date date not null,
+  count_type text not null default 'eod',
   status public.count_status not null default 'submitted',
   submitted_by uuid references public.users(id),
   submitted_at timestamptz not null default now(),
@@ -10,7 +11,8 @@ create table if not exists public.store_deep_freezer_counts (
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (location_id, business_date)
+  unique (location_id, business_date, count_type),
+  constraint store_deep_freezer_count_type_valid check (count_type in ('eod', 'morning'))
 );
 
 create table if not exists public.store_deep_freezer_count_items (
@@ -19,6 +21,8 @@ create table if not exists public.store_deep_freezer_count_items (
   flavour_id uuid not null references public.flavours(id),
   weight_kg numeric(8,3) not null default 0,
   unit text not null default 'kg',
+  expected_weight_kg numeric(8,3),
+  variance_kg numeric(8,3),
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -39,7 +43,7 @@ create table if not exists public.store_flavour_targets (
 );
 
 create index if not exists store_deep_freezer_counts_location_date_idx
-on public.store_deep_freezer_counts(location_id, business_date desc);
+on public.store_deep_freezer_counts(location_id, count_type, business_date desc);
 
 create index if not exists store_deep_freezer_count_items_flavour_idx
 on public.store_deep_freezer_count_items(flavour_id);

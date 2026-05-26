@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import type { AttendanceEntry } from "../../../domain/attendance";
 import type { Dispatch } from "../../../domain/dispatches";
+import type { DeepFreezerCountWithItems } from "../../../domain/inventory";
 import type { StaffProfile } from "../../../domain/roles";
 import type { InventoryCountWithItems } from "../../../domain/supplies";
 import { listStaff } from "../staff/staffApi";
 import { listAttendanceForDate } from "../../attendance/attendanceApi";
 import { listInventoryCounts } from "../../inventory/inventoryApi";
 import { listLabDispatches } from "../../lab/labApi";
+import { listDeepFreezerCounts, MORNING_VERIFICATION_TOLERANCE_KG } from "../../store/deepFreezerApi";
 import { listEodGelatoCounts, type EodCountWithItems } from "../../store/storeApi";
 import { CorrectionsPage } from "../corrections/CorrectionsPage";
 import { EodGelatoCorrectionsPage } from "../corrections/EodGelatoCorrectionsPage";
@@ -19,6 +21,7 @@ function todayDate(): string {
 export function AdminReportsPage() {
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [gelatoCounts, setGelatoCounts] = useState<EodCountWithItems[]>([]);
+  const [morningChecks, setMorningChecks] = useState<DeepFreezerCountWithItems[]>([]);
   const [inventoryCounts, setInventoryCounts] = useState<InventoryCountWithItems[]>([]);
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
@@ -28,13 +31,15 @@ export function AdminReportsPage() {
     Promise.all([
       listLabDispatches(),
       listEodGelatoCounts(),
+      listDeepFreezerCounts("morning"),
       listInventoryCounts(),
       listAttendanceForDate(todayDate()),
       listStaff(),
     ])
-      .then(([dispatchRows, gelatoRows, inventoryRows, attendanceRows, staffRows]) => {
+      .then(([dispatchRows, gelatoRows, morningRows, inventoryRows, attendanceRows, staffRows]) => {
         setDispatches(dispatchRows);
         setGelatoCounts(gelatoRows);
+        setMorningChecks(morningRows);
         setInventoryCounts(inventoryRows);
         setAttendance(attendanceRows);
         setStaff(staffRows);
@@ -75,6 +80,24 @@ export function AdminReportsPage() {
             detail: `${count.businessDate} / ${count.items.length} gelato lines`,
             badge: count.status,
           }))}
+        />
+      </section>
+
+      <section className="card">
+        <div className="card-title">Morning freezer checks</div>
+        {morningChecks.length === 0 ? <p className="muted-copy">No morning checks yet.</p> : null}
+        <ReportRows
+          rows={morningChecks.slice(0, 10).map((count) => {
+            const discrepancies = count.items.filter(
+              (item) => Math.abs(item.varianceKg ?? 0) > MORNING_VERIFICATION_TOLERANCE_KG,
+            ).length;
+            return {
+              id: count.id,
+              title: count.locationId,
+              detail: `${count.businessDate} / ${count.items.length} flavours`,
+              badge: discrepancies > 0 ? `${discrepancies} flags` : "verified",
+            };
+          })}
         />
       </section>
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDemoStaffData } from "../admin/staff/staffApi";
 import { listFlavours, resetDemoCatalogData } from "../catalog/catalogApi";
 import {
+  getDeepFreezerCount,
   listProjectedDeepFreezerBalances,
   listStoreGelatoRequirements,
   resetDemoDeepFreezerData,
@@ -18,6 +19,45 @@ describe("deep freezer inventory", () => {
     resetDemoDeepFreezerData();
     resetDemoLabData();
     resetDemoStoreData();
+  });
+
+  it("keeps morning verification separate from EOD freezer baseline", async () => {
+    const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PIS");
+    expect(flavour).toBeDefined();
+
+    await submitDeepFreezerCount({
+      locationId: "malsi",
+      businessDate: "2026-05-25",
+      countType: "eod",
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ flavourId: flavour!.id, weightKg: 4 }],
+    });
+
+    const morning = await submitDeepFreezerCount({
+      locationId: "malsi",
+      businessDate: "2026-05-25",
+      countType: "morning",
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ flavourId: flavour!.id, weightKg: 3.75 }],
+    });
+
+    const eod = await getDeepFreezerCount("malsi", "2026-05-25", "eod");
+    const balances = await listProjectedDeepFreezerBalances("malsi");
+
+    expect(morning.items[0]).toEqual(
+      expect.objectContaining({
+        expectedWeightKg: 4,
+        varianceKg: -0.25,
+      }),
+    );
+    expect(eod?.items[0].weightKg).toBe(4);
+    expect(balances.find((item) => item.flavourId === flavour!.id)?.currentWeightKg).toBe(4);
   });
 
   it("keeps store freezer counts separate and generates target-based lab requirements", async () => {

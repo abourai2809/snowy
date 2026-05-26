@@ -2,6 +2,7 @@ import type {
   DeepFreezerBalance,
   DeepFreezerCount,
   DeepFreezerCountItem,
+  DeepFreezerCountType,
   DeepFreezerCountWithItems,
   StoreFlavourTarget,
   StoreGelatoRequirement,
@@ -16,6 +17,7 @@ import { listDisplayMovements, listStoreReceipts, type StoreActor } from "./stor
 export interface DeepFreezerCountInput extends StoreActor {
   locationId: string;
   businessDate: string;
+  countType?: DeepFreezerCountType;
   notes: string | null;
   items: Array<{
     flavourId: string;
@@ -24,12 +26,25 @@ export interface DeepFreezerCountInput extends StoreActor {
   }>;
 }
 
+type PreparedDeepFreezerCountInput = Omit<DeepFreezerCountInput, "items"> & {
+  countType: DeepFreezerCountType;
+  items: Array<{
+    flavourId: string;
+    weightKg: number;
+    expectedWeightKg: number | null;
+    varianceKg: number | null;
+    notes?: string | null;
+  }>;
+};
+
 export interface StoreFlavourTargetInput {
   locationId: string;
   flavourId: string;
   targetWeightKg: number;
   actorRole: AppRole;
 }
+
+export const MORNING_VERIFICATION_TOLERANCE_KG = 0.05;
 
 let demoDeepFreezerCounts: DeepFreezerCount[] = [];
 let demoDeepFreezerItems: DeepFreezerCountItem[] = [];
@@ -48,6 +63,7 @@ function mapCount(row: Record<string, unknown>): DeepFreezerCount {
     id: String(row.id),
     locationId: String(row.location_id),
     businessDate: String(row.business_date),
+    countType: (row.count_type as DeepFreezerCountType | undefined) ?? "eod",
     status: row.status as DeepFreezerCount["status"],
     submittedBy: row.submitted_by ? String(row.submitted_by) : null,
     submittedAt: String(row.submitted_at),
@@ -68,6 +84,8 @@ function mapItem(row: Record<string, unknown>): DeepFreezerCountItem {
       flavour && typeof flavour === "object" && "name" in flavour ? String(flavour.name) : String(row.flavour_id),
     weightKg: Number(row.weight_kg ?? 0),
     unit: "kg",
+    expectedWeightKg: row.expected_weight_kg == null ? null : Number(row.expected_weight_kg),
+    varianceKg: row.variance_kg == null ? null : Number(row.variance_kg),
     notes: row.notes ? String(row.notes) : null,
   };
 }
@@ -84,6 +102,14 @@ function mapTarget(row: Record<string, unknown>): StoreFlavourTarget {
 
 function roundWeightKg(value: number): number {
   return Number(Math.max(0, value).toFixed(3));
+}
+
+function roundVarianceKg(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function getCountType(input: Pick<DeepFreezerCountInput, "countType">): DeepFreezerCountType {
+  return input.countType ?? "eod";
 }
 
 function addWeight(weights: Map<string, number>, flavourId: string, weightKg: number) {
@@ -154,20 +180,52 @@ export async function submitDeepFreezerCount(input: DeepFreezerCountInput): Prom
   assertValidWeights(input.items);
   await assertActiveFlavours(input.items);
 
-  const existing = await getDeepFreezerCount(input.locationId, input.businessDate);
+  const preparedInput = await prepareCountInput(input);
+  const existing = await getDeepFreezerCount(input.locationId, input.businessDate, preparedInput.countType);
   if (existing) {
     assertCanCorrect(input, input.businessDate);
   }
 
   if (!isSupabaseConfigured) {
-    return submitDemoCount(input, existing);
+    return submitDemoCount(preparedInput, existing);
   }
 
-  return submitSupabaseCount(input, existing);
+  return submitSupabaseCount(preparedInput, existing);
+}
+
+async function prepareCountInput(input: DeepFreezerCountInput): Promise<PreparedDeepFreezerCountInput> {
+  const countType = getCountType(input);
+  if (countType !== "morning") {
+    return {
+      ...input,
+      countType,
+      items: input.items.map((item) => ({ ...item, expectedWeightKg: null, varianceKg: null })),
+    };
+  }
+
+  const expectedByFlavour = new Map(
+    (await listProjectedDeepFreezerBalances(input.locationId)).map((balance) => [
+      balance.flavourId,
+      balance.currentWeightKg,
+    ]),
+  );
+
+  return {
+    ...input,
+    countType,
+    items: input.items.map((item) => {
+      const expectedWeightKg = roundWeightKg(expectedByFlavour.get(item.flavourId) ?? 0);
+      return {
+        ...item,
+        expectedWeightKg,
+        varianceKg: roundVarianceKg(item.weightKg - expectedWeightKg),
+      };
+    }),
+  };
 }
 
 async function submitDemoCount(
-  input: DeepFreezerCountInput,
+  input: PreparedDeepFreezerCountInput,
   existing: DeepFreezerCountWithItems | null,
 ): Promise<DeepFreezerCountWithItems> {
   const count: DeepFreezerCount = existing
@@ -182,6 +240,7 @@ async function submitDemoCount(
         id: makeId("freezer-count"),
         locationId: input.locationId,
         businessDate: input.businessDate,
+        countType: input.countType,
         status: "submitted",
         submittedBy: input.actorId,
         submittedAt: new Date().toISOString(),
@@ -206,6 +265,8 @@ async function submitDemoCount(
     flavourName: flavourById.get(item.flavourId)?.name ?? item.flavourId,
     weightKg: item.weightKg,
     unit: "kg",
+    expectedWeightKg: item.expectedWeightKg,
+    varianceKg: item.varianceKg,
     notes: item.notes ?? null,
   }));
   demoDeepFreezerItems.push(...items);
@@ -214,7 +275,7 @@ async function submitDemoCount(
 }
 
 async function submitSupabaseCount(
-  input: DeepFreezerCountInput,
+  input: PreparedDeepFreezerCountInput,
   existing: DeepFreezerCountWithItems | null,
 ): Promise<DeepFreezerCountWithItems> {
   const supabase = requireSupabaseClient();
@@ -237,6 +298,8 @@ async function submitSupabaseCount(
             flavour_id: item.flavourId,
             weight_kg: item.weightKg,
             unit: "kg",
+            expected_weight_kg: item.expectedWeightKg,
+            variance_kg: item.varianceKg,
             notes: item.notes ?? null,
           })),
         )
@@ -247,12 +310,13 @@ async function submitSupabaseCount(
   return { ...count, items: data.map(mapItem) };
 }
 
-async function createSupabaseCount(input: DeepFreezerCountInput): Promise<DeepFreezerCount> {
+async function createSupabaseCount(input: PreparedDeepFreezerCountInput): Promise<DeepFreezerCount> {
   const { data, error } = await requireSupabaseClient()
     .from("store_deep_freezer_counts")
     .insert({
       location_id: input.locationId,
       business_date: input.businessDate,
+      count_type: input.countType,
       status: "submitted",
       submitted_by: input.actorId,
       notes: input.notes,
@@ -264,7 +328,7 @@ async function createSupabaseCount(input: DeepFreezerCountInput): Promise<DeepFr
   return mapCount(data);
 }
 
-async function updateSupabaseCount(countId: string, input: DeepFreezerCountInput): Promise<DeepFreezerCount> {
+async function updateSupabaseCount(countId: string, input: PreparedDeepFreezerCountInput): Promise<DeepFreezerCount> {
   const { data, error } = await requireSupabaseClient()
     .from("store_deep_freezer_counts")
     .update({
@@ -284,10 +348,11 @@ async function updateSupabaseCount(countId: string, input: DeepFreezerCountInput
 export async function getDeepFreezerCount(
   locationId: string,
   businessDate: string,
+  countType: DeepFreezerCountType = "eod",
 ): Promise<DeepFreezerCountWithItems | null> {
   if (!isSupabaseConfigured) {
     const count = demoDeepFreezerCounts.find(
-      (item) => item.locationId === locationId && item.businessDate === businessDate,
+      (item) => item.locationId === locationId && item.businessDate === businessDate && item.countType === countType,
     );
     return count ? { ...count, items: demoDeepFreezerItems.filter((item) => item.countId === count.id) } : null;
   }
@@ -297,6 +362,7 @@ export async function getDeepFreezerCount(
     .select("*")
     .eq("location_id", locationId)
     .eq("business_date", businessDate)
+    .eq("count_type", countType)
     .maybeSingle();
 
   if (error) throw error;
@@ -315,25 +381,39 @@ async function listSupabaseItems(countId: string): Promise<DeepFreezerCountItem[
   return data.map(mapItem);
 }
 
-export async function listDeepFreezerCounts(): Promise<DeepFreezerCountWithItems[]> {
+export async function listDeepFreezerCounts(
+  countType?: DeepFreezerCountType,
+): Promise<DeepFreezerCountWithItems[]> {
   if (!isSupabaseConfigured) {
-    return demoDeepFreezerCounts.map((count) => ({
-      ...count,
-      items: demoDeepFreezerItems.filter((item) => item.countId === count.id),
-    }));
+    return demoDeepFreezerCounts
+      .filter((count) => !countType || count.countType === countType)
+      .map((count) => ({
+        ...count,
+        items: demoDeepFreezerItems.filter((item) => item.countId === count.id),
+      }));
   }
 
-  const { data, error } = await requireSupabaseClient()
+  let query = requireSupabaseClient()
     .from("store_deep_freezer_counts")
     .select("*")
-    .order("business_date", { ascending: false });
+    .order("business_date", { ascending: false })
+    .order("submitted_at", { ascending: false });
+
+  if (countType) {
+    query = query.eq("count_type", countType);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
   return Promise.all(data.map(async (row) => ({ ...mapCount(row), items: await listSupabaseItems(String(row.id)) })));
 }
 
-export async function getLatestDeepFreezerCount(locationId: string): Promise<DeepFreezerCountWithItems | null> {
-  const counts = await listDeepFreezerCounts();
+export async function getLatestDeepFreezerCount(
+  locationId: string,
+  countType: DeepFreezerCountType = "eod",
+): Promise<DeepFreezerCountWithItems | null> {
+  const counts = await listDeepFreezerCounts(countType);
   return (
     counts
       .filter((count) => count.locationId === locationId)

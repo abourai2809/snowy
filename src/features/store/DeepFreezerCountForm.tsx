@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { Flavour } from "../../domain/flavours";
+import type { DeepFreezerCountType } from "../../domain/inventory";
 import type { StoreActor } from "./storeApi";
 import { getDeepFreezerCount, listProjectedDeepFreezerBalances, submitDeepFreezerCount } from "./deepFreezerApi";
 
 interface DeepFreezerCountFormProps extends StoreActor {
   title?: string;
+  countType?: DeepFreezerCountType;
   locationId: string;
   businessDate: string;
   flavours: Flavour[];
@@ -16,6 +18,7 @@ export function DeepFreezerCountForm({
   actorLocationId,
   actorRole,
   businessDate,
+  countType = "eod",
   flavours,
   locationId,
   title = "EOD deep freezer weights",
@@ -32,7 +35,7 @@ export function DeepFreezerCountForm({
     async function loadWeights() {
       try {
         const [existing, projectedBalances] = await Promise.all([
-          getDeepFreezerCount(locationId, businessDate),
+          getDeepFreezerCount(locationId, businessDate, countType),
           listProjectedDeepFreezerBalances(locationId),
         ]);
         if (!mounted) return;
@@ -58,7 +61,7 @@ export function DeepFreezerCountForm({
     return () => {
       mounted = false;
     };
-  }, [businessDate, flavours, locationId]);
+  }, [businessDate, countType, flavours, locationId]);
 
   function updateWeight(flavourId: string, weightKg: string) {
     setWeights((current) => ({ ...current, [flavourId]: weightKg }));
@@ -73,6 +76,7 @@ export function DeepFreezerCountForm({
       const submitted = await submitDeepFreezerCount({
         locationId,
         businessDate,
+        countType,
         notes: null,
         actorId,
         actorRole,

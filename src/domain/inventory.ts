@@ -1,6 +1,7 @@
 export type FillState = "full" | "partial";
 export type ReceiptStatus = "accepted" | "rejected";
 export type CountStatus = "draft" | "submitted" | "corrected";
+export type DeepFreezerCountType = "eod" | "morning";
 
 export interface StoreReceipt {
   id: string;
@@ -50,6 +51,7 @@ export interface DeepFreezerCount {
   id: string;
   locationId: string;
   businessDate: string;
+  countType: DeepFreezerCountType;
   status: CountStatus;
   submittedBy: string | null;
   submittedAt: string;
@@ -65,6 +67,8 @@ export interface DeepFreezerCountItem {
   flavourName: string;
   weightKg: number;
   unit: "kg";
+  expectedWeightKg: number | null;
+  varianceKg: number | null;
   notes: string | null;
 }
 

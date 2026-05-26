@@ -11,6 +11,7 @@ import { IncomingDispatches } from "./IncomingDispatches";
 import { DisplayMovementForm } from "./DisplayMovementForm";
 import { DeepFreezerCountForm } from "./DeepFreezerCountForm";
 import { EodGelatoCount } from "./EodGelatoCount";
+import { MorningInventoryVerification } from "./MorningInventoryVerification";
 import {
   listBackupPans,
   listDisplayPans,
@@ -92,6 +93,7 @@ export function StoreDashboard() {
         <div className="card-title">Store actions</div>
         <div className="quick-action-grid">
           <a className="quick-action" href="#incoming-pans">Incoming pans</a>
+          <a className="quick-action" href="#morning-inventory-check">Morning check</a>
           <a className="quick-action" href="#urgent-requirement">Urgent need</a>
           <a className="quick-action" href="#move-to-display">Move to display</a>
           <a className="quick-action" href="#deep-freezer-weights">Deep freezer count</a>
@@ -100,6 +102,7 @@ export function StoreDashboard() {
         </div>
       </section>
       <UrgentRequirementsPanel key={urgentRefreshKey} profile={profile} locationId={locationId} />
+      <MorningInventoryVerification {...actor} locationId={locationId} businessDate={todayDate()} />
       <UrgentRequirementForm
         {...actor}
         locationId={locationId}

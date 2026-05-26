@@ -5,6 +5,7 @@ import { checkIn, resetDemoAttendanceData } from "../../attendance/attendanceApi
 import { listFlavours, resetDemoCatalogData } from "../../catalog/catalogApi";
 import { resetDemoInventoryData } from "../../inventory/inventoryApi";
 import { createDispatch, createProduction, resetDemoLabData } from "../../lab/labApi";
+import { resetDemoDeepFreezerData } from "../../store/deepFreezerApi";
 import {
   acceptIncomingDispatch,
   listIncomingDispatches,
@@ -22,6 +23,7 @@ describe("AdminReportsPage", () => {
     resetDemoInventoryData();
     resetDemoLabData();
     resetDemoStoreData();
+    resetDemoDeepFreezerData();
   });
 
   it("shows the attendance roster in Admin store oversight", async () => {
