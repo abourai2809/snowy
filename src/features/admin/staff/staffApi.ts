@@ -237,8 +237,10 @@ export async function getCurrentStaffProfile(): Promise<StaffProfile | null> {
 }
 
 export async function loginWithPhone(phone: string, password: string): Promise<StaffProfile> {
+  const normalizedPhone = normalizePhone(phone);
+
   if (!isSupabaseConfigured) {
-    const member = demoStaff.find((staff) => staff.phone === phone);
+    const member = demoStaff.find((staff) => staff.phone === normalizedPhone);
 
     if (!member || member.password !== password) {
       throw new Error("Invalid phone or password.");
@@ -260,16 +262,22 @@ export async function loginWithPhone(phone: string, password: string): Promise<S
   }
 
   const supabase = requireSupabaseClient();
-  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-    email: `${phone}@snowy-owl.internal`,
-    password,
-  });
+  let lastError: Error | null = null;
 
-  if (authError) {
-    throw authError;
+  for (const email of staffAuthEmails(normalizedPhone)) {
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (!authError) {
+      return getStaffProfileByAuthUserId(authData.user.id);
+    }
+
+    lastError = authError;
   }
 
-  return getStaffProfileByAuthUserId(authData.user.id);
+  throw lastError ?? new Error("Unable to sign in.");
 }
 
 export async function signOutStaff() {
@@ -355,7 +363,11 @@ function normalizePhone(phone: string) {
 }
 
 function staffEmail(phone: string) {
-  return `${phone}@snowy-owl.internal`;
+  return `${phone}@staff.snowyowlgelato.com`;
+}
+
+function staffAuthEmails(phone: string) {
+  return [staffEmail(phone), `${phone}@snowy-owl.internal`];
 }
 
 export async function requestStaffSignup(input: StaffSignupInput): Promise<StaffProfile> {
