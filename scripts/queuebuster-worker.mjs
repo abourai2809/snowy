@@ -15,6 +15,8 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const workerId = process.env.QUEUEBUSTER_WORKER_ID || `queuebuster-worker-${process.pid}`;
 const pollIntervalMs = Number(process.env.QUEUEBUSTER_POLL_INTERVAL_MS || 15_000);
+const staleAfterMinutes = Number(process.env.QUEUEBUSTER_STALE_AFTER_MINUTES || 30);
+const maxAttempts = Number(process.env.QUEUEBUSTER_MAX_ATTEMPTS || 3);
 const runOnce = process.env.QUEUEBUSTER_RUN_ONCE === "1";
 const dryRun = process.env.QUEUEBUSTER_DRY_RUN === "1";
 
@@ -46,6 +48,7 @@ async function main() {
 }
 
 async function processNextJob() {
+  await recoverStaleJobs();
   const job = await claimNextJob();
   if (!job) {
     if (runOnce) console.log("No pending QueueBuster jobs.");
@@ -63,6 +66,15 @@ async function processNextJob() {
     const message = redactSecrets(error instanceof Error ? error.message : String(error));
     await completeJob(job.id, "failed", { summary: message }, message);
   }
+}
+
+async function recoverStaleJobs() {
+  const { error } = await supabase.rpc("recover_stale_queuebuster_jobs", {
+    max_age_minutes: staleAfterMinutes,
+    max_attempts: maxAttempts,
+  });
+
+  if (error) throw error;
 }
 
 async function claimNextJob() {
