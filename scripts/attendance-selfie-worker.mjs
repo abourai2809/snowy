@@ -7,6 +7,7 @@ const model = process.env.ATTENDANCE_SELFIE_MODEL || "gemini-2.5-flash-lite";
 const pollIntervalMs = Number(process.env.ATTENDANCE_SELFIE_POLL_INTERVAL_MS || 30_000);
 const runOnce = process.env.ATTENDANCE_SELFIE_RUN_ONCE === "1";
 const dryRun = process.env.ATTENDANCE_SELFIE_DRY_RUN === "1";
+const maxChecks = parsePositiveInteger(process.env.ATTENDANCE_SELFIE_MAX_CHECKS);
 
 if (!supabaseUrl || !serviceRoleKey) {
   throw new Error("Set SUPABASE_URL or VITE_SUPABASE_URL, plus SUPABASE_SERVICE_ROLE_KEY, before running the worker.");
@@ -31,6 +32,17 @@ main().catch((error) => {
 async function main() {
   console.log(`Attendance selfie worker started with ${model}${dryRun ? " (dry run)" : ""}.`);
 
+  if (maxChecks) {
+    let processed = 0;
+    while (processed < maxChecks) {
+      const didProcess = await processNextCheck();
+      if (!didProcess) break;
+      processed += 1;
+    }
+    console.log(`Processed ${processed} attendance selfie check(s).`);
+    return;
+  }
+
   do {
     await processNextCheck();
     if (!runOnce) {
@@ -43,7 +55,7 @@ async function processNextCheck() {
   const check = await claimNextCheck();
   if (!check) {
     if (runOnce) console.log("No queued attendance selfie checks.");
-    return;
+    return false;
   }
 
   try {
@@ -55,6 +67,8 @@ async function processNextCheck() {
     const message = error instanceof Error ? error.message : String(error);
     await failCheck(check.id, message);
   }
+
+  return true;
 }
 
 async function claimNextCheck() {
@@ -246,4 +260,10 @@ function mimeTypeForPath(path) {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parsePositiveInteger(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
 }

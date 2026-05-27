@@ -42,7 +42,7 @@ QueueBuster jobs are created from the Admin Catalog page and executed by a backe
 
 ## Attendance Selfie Worker
 
-Attendance selfie checks are queued in Supabase and processed by a backend worker with Gemini. See `docs/attendance-selfie-ai.md`.
+Attendance selfie checks are queued in Supabase and processed by a backend worker with Gemini. For now, `.github/workflows/attendance-selfie-checks.yml` runs the worker on a schedule through GitHub Actions. See `docs/attendance-selfie-ai.md`.
 
 ## Product Docs
 

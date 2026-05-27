@@ -58,6 +58,28 @@ ATTENDANCE_SELFIE_DRY_RUN=0
 
 Use `ATTENDANCE_SELFIE_DRY_RUN=1` to verify queue processing without calling Gemini.
 
+Use `ATTENDANCE_SELFIE_MAX_CHECKS=25` when running in a scheduled job. This drains up to 25 queued checks and then exits.
+
+## GitHub Actions
+
+The workflow `.github/workflows/attendance-selfie-checks.yml` runs every 5 minutes and can also be run manually from the GitHub Actions tab.
+
+Configure these repository secrets:
+
+```bash
+SUPABASE_URL=https://mbjiqmrsjjxputwveymi.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
+```
+
+Optional repository variable:
+
+```bash
+ATTENDANCE_SELFIE_MODEL=gemini-2.5-flash-lite
+```
+
+The scheduled action processes up to 25 queued selfie checks per run. Manual runs include a `dry_run` input for testing the queue without calling Gemini.
+
 ## Review Posture
 
 The AI should flag records, not block attendance. A failed or unclear result should become `needs_review` for Admin/manager. This avoids payroll disruption while we tune the prompt against real sample photos.
