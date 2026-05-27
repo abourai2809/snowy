@@ -123,6 +123,13 @@ ATTENDANCE_SELFIE_ARCHIVE_DRY_RUN=0
 
 The Google service account must have access to the target Drive folder. The worker uploads each old selfie to that folder, records `archive_provider`, `archive_path`, `archive_file_id`, and `archived_at` in `attendance_selfie_checks`, then removes the private Supabase Storage object and records `storage_deleted_at`.
 
+The GitHub workflow `.github/workflows/archive-attendance-selfies.yml` runs this archive worker daily and can also be run manually from the GitHub Actions tab. Configure these repository secrets before enabling it:
+
+```bash
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=
+GOOGLE_DRIVE_ATTENDANCE_SELFIE_FOLDER_ID=
+```
+
 ## Review Posture
 
 The AI should flag records, not block attendance. A failed or unclear result should become `needs_review` for Admin/manager. This avoids payroll disruption while we tune the prompt against real sample photos.
