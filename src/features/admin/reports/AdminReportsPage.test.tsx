@@ -26,7 +26,7 @@ describe("AdminReportsPage", () => {
     resetDemoDeepFreezerData();
   });
 
-  it("shows the attendance roster in Admin store oversight", async () => {
+  it("shows the attendance roster in Admin review and store oversight", async () => {
     const user = userEvent.setup();
     const storeStaff = getDemoStaffByRole("store_staff");
     const shift = await checkIn(storeStaff, storeStaff.defaultLocationId, new Date(), null, selfieFile());
@@ -35,13 +35,17 @@ describe("AdminReportsPage", () => {
     renderApp(<App initialRole="admin" />);
     await user.click(screen.getByRole("button", { name: "Stores" }));
 
-    expect(await screen.findByText("Monthly attendance review")).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Monthly attendance review" })).toBeInTheDocument();
-    expect(screen.getByText("Full day")).toBeInTheDocument();
     expect(await screen.findByText("Today roster")).toBeInTheDocument();
     expect(screen.getAllByText(storeStaff.name).length).toBeGreaterThan(0);
     expect(screen.getByText("Recent attendance selfies")).toBeInTheDocument();
     expect(screen.getByAltText(`Attendance selfie for ${storeStaff.name}`)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Review" }));
+
+    expect(await screen.findByText("Monthly attendance review")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Monthly attendance review" })).toBeInTheDocument();
+    expect(screen.getByText("Full day")).toBeInTheDocument();
+    expect(screen.getByText("Attendance selfie review")).toBeInTheDocument();
   });
 
   it("lets Admin correct historical EOD gelato weights", async () => {

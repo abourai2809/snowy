@@ -3,6 +3,7 @@ import {
   ClipboardCheck,
   FlaskConical,
   Home,
+  Eye,
   PackageSearch,
   Settings2,
   Store,
@@ -16,6 +17,7 @@ export type RouteId =
   | "lab"
   | "store"
   | "stores"
+  | "review"
   | "catalog"
   | "staff";
 
@@ -68,6 +70,13 @@ export const APP_ROUTES: readonly AppRoute[] = [
     roles: ["admin"],
   },
   {
+    id: "review",
+    label: "Review",
+    navLabel: "Review",
+    icon: Eye,
+    roles: ["admin"],
+  },
+  {
     id: "catalog",
     label: "Catalog",
     navLabel: "Catalog",
@@ -84,7 +93,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
 ] as const;
 
 export const HOME_CARDS: Record<AppRole, readonly string[]> = {
-  admin: ["Catalog setup", "Staff roster", "Store reports", "Lab overview"],
+  admin: ["Catalog setup", "Staff roster", "Store reports", "Review"],
   store_manager: ["Incoming pans", "EOD review", "Same-day corrections", "Store supplies"],
   lab_manager: ["Production batches", "Dispatch queue", "Raw materials", "Lab supplies"],
   store_staff: ["Check in", "Incoming pans", "Move to display", "EOD display count"],
@@ -96,7 +105,7 @@ export const HOME_CARD_ROUTES: Record<AppRole, Record<string, RouteId>> = {
     "Catalog setup": "catalog",
     "Staff roster": "staff",
     "Store reports": "stores",
-    "Lab overview": "lab",
+    Review: "review",
   },
   store_manager: {
     "Incoming pans": "store",
@@ -130,6 +139,7 @@ export const OPERATION_CARDS: Record<RouteId, readonly string[]> = {
   lab: ["Production", "Dispatch", "Raw materials", "Lab supplies"],
   store: ["Incoming pans", "Backup freezer", "Move to display", "End of day"],
   stores: ["Rajpur Road", "Malsi", "Mussoorie", "All stores"],
+  review: ["Attendance selfies", "Attendance sheet", "Store reports", "Lab requirements"],
   catalog: ["Flavours", "Products", "Store supplies", "Lab supplies", "Raw materials", "Packaging"],
   staff: ["Staff roster", "Holiday allowance", "Bonus days", "Inactive staff"],
 };
@@ -196,6 +206,7 @@ export function getRouteSummary(routeId: RouteId): string {
     lab: "Production desk",
     store: "Store desk",
     stores: "Store oversight",
+    review: "Admin review",
     catalog: "Master data",
     staff: "Team setup",
   };

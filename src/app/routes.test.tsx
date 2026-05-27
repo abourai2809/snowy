@@ -8,6 +8,7 @@ describe("role routes", () => {
       "attendance",
       "lab",
       "stores",
+      "review",
       "catalog",
       "staff",
     ]);
@@ -42,6 +43,7 @@ describe("role routes", () => {
   it("maps dashboard cards to persona routes", () => {
     expect(getCardTargetRoute("dashboard", "admin", "Catalog setup")).toBe("catalog");
     expect(getCardTargetRoute("dashboard", "admin", "Staff roster")).toBe("staff");
+    expect(getCardTargetRoute("dashboard", "admin", "Review")).toBe("review");
     expect(getCardTargetRoute("dashboard", "store_staff", "Check in")).toBe("attendance");
     expect(getCardTargetRoute("dashboard", "store_staff", "Move to display")).toBe("store");
     expect(getCardTargetRoute("dashboard", "lab_staff", "Production entry")).toBe("lab");
