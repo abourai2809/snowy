@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import type { AttendanceEntry } from "../../../domain/attendance";
+import type { AttendanceEntry, AttendanceSelfieCheck } from "../../../domain/attendance";
 import type { Dispatch } from "../../../domain/dispatches";
 import type { DeepFreezerCountWithItems } from "../../../domain/inventory";
 import type { StaffProfile } from "../../../domain/roles";
 import type { InventoryCountWithItems } from "../../../domain/supplies";
 import { listStaff } from "../staff/staffApi";
-import { listAttendanceForDate } from "../../attendance/attendanceApi";
+import { listAttendanceForDate, listSelfieChecksForAttendanceIds } from "../../attendance/attendanceApi";
 import { listInventoryCounts } from "../../inventory/inventoryApi";
 import { listLabDispatches } from "../../lab/labApi";
 import { listDeepFreezerCounts, MORNING_VERIFICATION_TOLERANCE_KG } from "../../store/deepFreezerApi";
@@ -25,32 +25,38 @@ export function AdminReportsPage() {
   const [inventoryCounts, setInventoryCounts] = useState<InventoryCountWithItems[]>([]);
   const [emptyPanCounts, setEmptyPanCounts] = useState<StoreEmptyPanCount[]>([]);
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
+  const [selfieChecks, setSelfieChecks] = useState<AttendanceSelfieCheck[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      listLabDispatches(),
-      listEodGelatoCounts(),
-      listDeepFreezerCounts("morning"),
-      listInventoryCounts(),
-      listEmptyPanCountsByStore(),
-      listAttendanceForDate(todayDate()),
-      listStaff(),
-    ])
-      .then(([dispatchRows, gelatoRows, morningRows, inventoryRows, emptyPanRows, attendanceRows, staffRows]) => {
+    async function loadReports() {
+      const [dispatchRows, gelatoRows, morningRows, inventoryRows, emptyPanRows, attendanceRows, staffRows] = await Promise.all([
+        listLabDispatches(),
+        listEodGelatoCounts(),
+        listDeepFreezerCounts("morning"),
+        listInventoryCounts(),
+        listEmptyPanCountsByStore(),
+        listAttendanceForDate(todayDate()),
+        listStaff(),
+      ]);
+      const selfieRows = await listSelfieChecksForAttendanceIds(attendanceRows.map((entry) => entry.id));
+
         setDispatches(dispatchRows);
         setGelatoCounts(gelatoRows);
         setMorningChecks(morningRows);
         setInventoryCounts(inventoryRows);
         setEmptyPanCounts(emptyPanRows);
         setAttendance(attendanceRows);
+        setSelfieChecks(selfieRows);
         setStaff(staffRows);
-      })
-      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Unable to load reports."));
+    }
+
+    void loadReports().catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Unable to load reports."));
   }, []);
 
   const staffById = new Map(staff.map((item) => [item.id, item]));
+  const selfieCheckByEntryId = new Map(selfieChecks.map((check) => [check.attendanceEntryId, check]));
 
   return (
     <div className="page-stack">
@@ -137,8 +143,8 @@ export function AdminReportsPage() {
           rows={attendance.map((entry) => ({
             id: entry.id,
             title: staffById.get(entry.userId)?.name ?? entry.userId,
-            detail: formatAttendanceDetail(entry),
-            badge: entry.status,
+            detail: formatAttendanceDetail(entry, selfieCheckByEntryId.get(entry.id)),
+            badge: formatSelfieBadge(entry, selfieCheckByEntryId.get(entry.id)),
           }))}
         />
       </section>
@@ -150,7 +156,7 @@ export function AdminReportsPage() {
   );
 }
 
-function formatAttendanceDetail(entry: AttendanceEntry): string {
+function formatAttendanceDetail(entry: AttendanceEntry, selfieCheck: AttendanceSelfieCheck | undefined): string {
   const location = entry.locationId ?? "No location";
   const checkIn = entry.checkInLocation
     ? `In ${entry.checkInLocation.distanceM ?? "n/a"}m / acc ${entry.checkInLocation.accuracyM ?? "n/a"}m`
@@ -160,7 +166,32 @@ function formatAttendanceDetail(entry: AttendanceEntry): string {
     : entry.checkOutAt
       ? "Out location not captured"
       : "Still checked in";
-  return `${location} - ${checkIn} - ${checkOut}`;
+  return `${location} - ${checkIn} - ${checkOut} - ${formatSelfieDetail(entry, selfieCheck)}`;
+}
+
+function formatSelfieBadge(entry: AttendanceEntry, selfieCheck: AttendanceSelfieCheck | undefined): string {
+  if (!entry.selfieInUrl) return entry.status;
+  if (!selfieCheck) return "selfie queued";
+  if (selfieCheck.status === "queued" || selfieCheck.status === "running") return `selfie ${selfieCheck.status}`;
+  if (selfieCheck.status === "failed") return "selfie failed";
+  return selfieCheck.overallStatus?.replace("_", " ") ?? "needs review";
+}
+
+function formatSelfieDetail(entry: AttendanceEntry, selfieCheck: AttendanceSelfieCheck | undefined): string {
+  if (!entry.selfieInUrl) return "No selfie";
+  if (!selfieCheck) return "Selfie queued";
+  if (selfieCheck.status === "queued" || selfieCheck.status === "running") return `Selfie ${selfieCheck.status}`;
+  if (selfieCheck.status === "failed") return `Selfie failed: ${selfieCheck.errorMessage ?? "needs review"}`;
+
+  const confidence = selfieCheck.confidence === null ? "confidence n/a" : `${Math.round(selfieCheck.confidence * 100)}% confidence`;
+  const notes = selfieCheck.notes ? ` / ${selfieCheck.notes}` : "";
+  return [
+    `Selfie ${selfieCheck.overallStatus?.replace("_", " ") ?? "needs review"}`,
+    `apron ${selfieCheck.apronStatus ?? "unclear"}`,
+    `headwear ${selfieCheck.headwearStatus ?? "unclear"}`,
+    `glove ${selfieCheck.gloveThumbsUpStatus ?? "unclear"}`,
+    confidence,
+  ].join(" / ") + notes;
 }
 
 function ReportRows({ rows }: { rows: Array<{ id: string; title: string; detail: string; badge: string }> }) {

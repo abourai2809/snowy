@@ -374,5 +374,11 @@ function formatSelfieCheck(check: AttendanceSelfieCheck | undefined): string {
     return "Selfie check: needs review";
   }
 
-  return `Selfie check: ${check.overallStatus?.replace("_", " ") ?? "needs review"}`;
+  const details = [
+    `apron ${check.apronStatus ?? "unclear"}`,
+    `headwear ${check.headwearStatus ?? "unclear"}`,
+    `glove ${check.gloveThumbsUpStatus ?? "unclear"}`,
+    check.confidence === null ? null : `confidence ${Math.round(check.confidence * 100)}%`,
+  ].filter(Boolean);
+  return `Selfie check: ${check.overallStatus?.replace("_", " ") ?? "needs review"} / ${details.join(" / ")}`;
 }

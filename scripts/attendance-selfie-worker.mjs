@@ -63,9 +63,19 @@ async function processNextCheck() {
       ? buildDryRunResult()
       : await validateSelfieWithGemini(check.selfie_path);
     await completeCheck(check.id, result);
+    console.log(
+      [
+        `Check ${check.id}: ${result.overallStatus}`,
+        `apron=${result.apronStatus}`,
+        `headwear=${result.headwearStatus}`,
+        `glove_thumbs_up=${result.gloveThumbsUpStatus}`,
+        result.confidence === null ? null : `confidence=${result.confidence}`,
+      ].filter(Boolean).join(" / "),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await failCheck(check.id, message);
+    console.log(`Check ${check.id}: failed / ${message}`);
   }
 
   return true;
