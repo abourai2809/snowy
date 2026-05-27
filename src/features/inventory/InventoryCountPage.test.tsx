@@ -25,6 +25,10 @@ describe("InventoryCountPage", () => {
     expect(await screen.findByText("Checked in")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Store" }));
+    await screen.findAllByRole("button", { name: "Confirm Malsi" });
+    const supplySection = await findSection("store-supply-checklist");
+    await user.click(within(supplySection).getByRole("button", { name: "Confirm Malsi" }));
+    expect(await screen.findByText("Location verified for Malsi.")).toBeInTheDocument();
     const form = await screen.findByRole("form", { name: "Store supply checklist form" });
 
     await user.type(within(form).getByLabelText("Single Use Cups quantity"), "210");
@@ -37,6 +41,12 @@ describe("InventoryCountPage", () => {
     expect(screen.queryByRole("button", { name: "Add item" })).not.toBeInTheDocument();
   });
 });
+
+async function findSection(id: string): Promise<HTMLElement> {
+  const section = document.querySelector(`#${id}`);
+  expect(section).not.toBeNull();
+  return section as HTMLElement;
+}
 
 async function uploadCheckInSelfie(user: ReturnType<typeof userEvent.setup>) {
   const file = new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" });

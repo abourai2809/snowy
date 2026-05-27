@@ -82,6 +82,32 @@ describe("AttendancePage", () => {
     expect(await screen.findByText(/PIS-20260524-01/)).toBeInTheDocument();
   });
 
+  it("lets checked-in staff switch stores without checking out", async () => {
+    const user = userEvent.setup();
+
+    renderApp(<App initialRole="store_staff" />);
+    await user.click(screen.getByRole("button", { name: "Attendance" }));
+    await user.selectOptions(await screen.findByLabelText("Work store"), "rajpur");
+    mockDeviceLocation(RAJPUR_LOCATION);
+    await uploadCheckInSelfie(user);
+    await user.click(screen.getByRole("button", { name: "Check in" }));
+
+    expect(await screen.findByText("Checked in")).toBeInTheDocument();
+    expect(screen.getAllByText("Rajpur Road").length).toBeGreaterThan(0);
+
+    await user.selectOptions(screen.getByLabelText("Work store"), "malsi");
+    mockDeviceLocation(MALSI_LOCATION);
+    await user.click(screen.getByRole("button", { name: "Switch location" }));
+
+    expect(await screen.findAllByText("Malsi")).not.toHaveLength(0);
+    expect(screen.getByText("Checked in")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check out" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Store" }));
+    expect(await screen.findByText("Current store:")).toBeInTheDocument();
+    expect(screen.getAllByText("Malsi").length).toBeGreaterThan(0);
+  });
+
   it("blocks store workflows until store staff check in", async () => {
     const user = userEvent.setup();
 

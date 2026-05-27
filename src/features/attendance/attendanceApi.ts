@@ -5,12 +5,14 @@ import {
   isCheckedOut,
   type AttendanceEntry,
   type AttendanceLocationEvidence,
+  type AttendanceLocationSegment,
   type AttendanceSelfieCheck,
   type AttendanceSelfieReview,
 } from "../../domain/attendance";
 import type { StaffProfile } from "../../domain/roles";
 
 let demoAttendance: AttendanceEntry[] = [];
+let demoLocationSegments: AttendanceLocationSegment[] = [];
 let demoSelfieChecks: AttendanceSelfieCheck[] = [];
 
 function mapAttendanceRow(row: Record<string, unknown>): AttendanceEntry {
@@ -58,6 +60,18 @@ function mapSelfieCheckRow(row: Record<string, unknown>): AttendanceSelfieCheck 
   };
 }
 
+function mapLocationSegmentRow(row: Record<string, unknown>): AttendanceLocationSegment {
+  return {
+    id: String(row.id),
+    attendanceEntryId: String(row.attendance_entry_id),
+    userId: String(row.user_id),
+    locationId: String(row.location_id),
+    workDate: String(row.work_date),
+    checkInAt: String(row.check_in_at),
+    checkOutAt: row.check_out_at ? String(row.check_out_at) : null,
+  };
+}
+
 function mapLocationEvidence(row: Record<string, unknown>, prefix: "check_in" | "check_out"): AttendanceLocationEvidence | null {
   const status = row[`${prefix}_location_status`];
   const latitude = row[`${prefix}_latitude`];
@@ -100,11 +114,16 @@ function buildLocationColumns(prefix: "check_in" | "check_out", evidence?: Atten
 
 export function resetDemoAttendanceData() {
   demoAttendance = [];
+  demoLocationSegments = [];
   demoSelfieChecks = [];
 }
 
 function sortAttendance(entries: AttendanceEntry[]): AttendanceEntry[] {
   return [...entries].sort((a, b) => new Date(a.checkInAt).getTime() - new Date(b.checkInAt).getTime());
+}
+
+function sortLocationSegments(segments: AttendanceLocationSegment[]): AttendanceLocationSegment[] {
+  return [...segments].sort((a, b) => new Date(a.checkInAt).getTime() - new Date(b.checkInAt).getTime());
 }
 
 export async function listTodayAttendanceForUser(userId: string, date = getTodayKey()): Promise<AttendanceEntry[]> {
@@ -129,6 +148,48 @@ export async function listTodayAttendanceForUser(userId: string, date = getToday
 export async function getActiveAttendance(userId: string, date = getTodayKey()): Promise<AttendanceEntry | null> {
   const entries = await listTodayAttendanceForUser(userId, date);
   return entries.find((entry) => !isCheckedOut(entry)) ?? null;
+}
+
+export async function listTodayLocationSegmentsForUser(
+  userId: string,
+  date = getTodayKey(),
+): Promise<AttendanceLocationSegment[]> {
+  if (!isSupabaseConfigured) {
+    return sortLocationSegments(
+      demoLocationSegments.filter((segment) => segment.userId === userId && segment.workDate === date),
+    );
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("attendance_location_segments")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("work_date", date)
+    .order("check_in_at");
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapLocationSegmentRow);
+}
+
+export async function getActiveLocationSegment(
+  userId: string,
+  date = getTodayKey(),
+): Promise<AttendanceLocationSegment | null> {
+  const segments = await listTodayLocationSegmentsForUser(userId, date);
+  return segments.find((segment) => !segment.checkOutAt) ?? null;
+}
+
+export async function getCurrentAttendanceLocationId(userId: string, date = getTodayKey()): Promise<string | null> {
+  const segment = await getActiveLocationSegment(userId, date);
+  if (segment) {
+    return segment.locationId;
+  }
+
+  const entry = await getActiveAttendance(userId, date);
+  return entry?.locationId ?? null;
 }
 
 export async function getTodayAttendance(userId: string, date = getTodayKey()): Promise<AttendanceEntry | null> {
@@ -368,6 +429,103 @@ async function requestSelfieProcessing(attendanceEntryId: string): Promise<void>
   }
 }
 
+async function startLocationSegment(entry: AttendanceEntry, locationId: string, now: Date): Promise<void> {
+  const checkInAt = now.toISOString();
+
+  if (!isSupabaseConfigured) {
+    demoLocationSegments.push({
+      id: `attendance-location-${Date.now()}-${demoLocationSegments.length}`,
+      attendanceEntryId: entry.id,
+      userId: entry.userId,
+      locationId,
+      workDate: entry.workDate,
+      checkInAt,
+      checkOutAt: null,
+    });
+    return;
+  }
+
+  const { error } = await requireSupabaseClient()
+    .from("attendance_location_segments")
+    .insert({
+      attendance_entry_id: entry.id,
+      user_id: entry.userId,
+      location_id: locationId,
+      work_date: entry.workDate,
+      check_in_at: checkInAt,
+    });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function closeActiveLocationSegment(userId: string, workDate: string, now: Date): Promise<void> {
+  const checkOutAt = now.toISOString();
+
+  if (!isSupabaseConfigured) {
+    const activeSegment = demoLocationSegments.find(
+      (segment) => segment.userId === userId && segment.workDate === workDate && !segment.checkOutAt,
+    );
+    if (activeSegment) {
+      activeSegment.checkOutAt = checkOutAt;
+    }
+    return;
+  }
+
+  const { error } = await requireSupabaseClient()
+    .from("attendance_location_segments")
+    .update({ check_out_at: checkOutAt })
+    .eq("user_id", userId)
+    .eq("work_date", workDate)
+    .is("check_out_at", null);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function ensurePriorLocationSegment(entry: AttendanceEntry, now: Date): Promise<void> {
+  if (!entry.locationId) {
+    return;
+  }
+
+  const activeSegment = await getActiveLocationSegment(entry.userId, entry.workDate);
+  if (activeSegment) {
+    return;
+  }
+
+  const checkOutAt = now.toISOString();
+
+  if (!isSupabaseConfigured) {
+    demoLocationSegments.push({
+      id: `attendance-location-${Date.now()}-${demoLocationSegments.length}`,
+      attendanceEntryId: entry.id,
+      userId: entry.userId,
+      locationId: entry.locationId,
+      workDate: entry.workDate,
+      checkInAt: entry.checkInAt,
+      checkOutAt,
+    });
+    return;
+  }
+
+  const { error } = await requireSupabaseClient()
+    .from("attendance_location_segments")
+    .insert({
+      attendance_entry_id: entry.id,
+      user_id: entry.userId,
+      location_id: entry.locationId,
+      work_date: entry.workDate,
+      check_in_at: entry.checkInAt,
+      check_out_at: checkOutAt,
+    });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function checkIn(
   profile: StaffProfile,
   locationId: string | null,
@@ -408,6 +566,7 @@ export async function checkIn(
       selfieOutUrl: null,
     };
     demoAttendance.push(created);
+    await startLocationSegment(created, locationId, now);
     await createSelfieCheck(created.id, selfiePath);
     return created;
   }
@@ -431,9 +590,60 @@ export async function checkIn(
   }
 
   const entry = mapAttendanceRow(data);
+  await startLocationSegment(entry, locationId, now);
   await createSelfieCheck(entry.id, selfiePath);
   void requestSelfieProcessing(entry.id);
   return entry;
+}
+
+export async function switchAttendanceLocation(
+  entry: AttendanceEntry,
+  locationId: string | null,
+  now = new Date(),
+): Promise<AttendanceEntry> {
+  if (entry.checkOutAt) {
+    throw new Error("Attendance is already checked out for today.");
+  }
+
+  if (!locationId) {
+    throw new Error("Work location is required.");
+  }
+
+  const activeSegment = await getActiveLocationSegment(entry.userId, entry.workDate);
+  const currentLocationId = activeSegment?.locationId ?? entry.locationId;
+
+  if (currentLocationId === locationId) {
+    return entry;
+  }
+
+  await ensurePriorLocationSegment(entry, now);
+  await closeActiveLocationSegment(entry.userId, entry.workDate, now);
+
+  if (!isSupabaseConfigured) {
+    const existing = demoAttendance.find((item) => item.id === entry.id);
+    if (!existing) {
+      throw new Error("Attendance entry not found.");
+    }
+
+    existing.locationId = locationId;
+    await startLocationSegment(existing, locationId, now);
+    return { ...existing };
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("attendance_entries")
+    .update({ location_id: locationId })
+    .eq("id", entry.id)
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const updatedEntry = mapAttendanceRow(data);
+  await startLocationSegment(updatedEntry, locationId, now);
+  return updatedEntry;
 }
 
 export async function checkOut(
@@ -458,6 +668,7 @@ export async function checkOut(
     existing.hours = hours;
     existing.status = "checked_out";
     existing.checkOutLocation = locationEvidence ?? null;
+    await closeActiveLocationSegment(existing.userId, existing.workDate, now);
     return { ...existing };
   }
 
@@ -477,5 +688,7 @@ export async function checkOut(
     throw error;
   }
 
-  return mapAttendanceRow(data);
+  const updatedEntry = mapAttendanceRow(data);
+  await closeActiveLocationSegment(updatedEntry.userId, updatedEntry.workDate, now);
+  return updatedEntry;
 }

@@ -38,6 +38,16 @@ export interface AttendanceEntry {
   selfieOutUrl: string | null;
 }
 
+export interface AttendanceLocationSegment {
+  id: string;
+  attendanceEntryId: string;
+  userId: string;
+  locationId: string;
+  workDate: string;
+  checkInAt: string;
+  checkOutAt: string | null;
+}
+
 export interface AttendanceSelfieCheck {
   id: string;
   attendanceEntryId: string;

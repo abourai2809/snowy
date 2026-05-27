@@ -96,7 +96,9 @@ Current local validation:
 
 - `supabase start` successfully applied `202605210001_operations_mvp.sql`.
 - `supabase db reset` successfully reapplied the migration and `supabase/seed.sql`.
-- Local schema has 24 public application tables and 12 public enum types.
-- RLS is enabled on all 24 application tables.
+- Local schema has 33 public application tables and 15 public enum types.
+- RLS is enabled on all 33 application tables.
 - Seed counts are 5 roles, 4 locations, 30 flavours, 5 catalog categories, and 17 catalog items.
 - RLS smoke checks passed: store staff cannot create catalog data, Admin can.
+
+Attendance location changes are tracked in `attendance_location_segments`; an active shift can move between stores without creating a second attendance entry or interrupting hours worked.

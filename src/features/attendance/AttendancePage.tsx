@@ -10,6 +10,7 @@ import {
   listAttendanceForDate,
   listSelfieChecksForAttendanceIds,
   listTodayAttendanceForUser,
+  switchAttendanceLocation,
 } from "./attendanceApi";
 import type { AttendanceSelfieCheck } from "../../domain/attendance";
 import { collectVerifiedAttendanceLocation } from "./locationEvidence";
@@ -30,7 +31,7 @@ export function AttendancePage() {
   const [selfieInputKey, setSelfieInputKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submittingAction, setSubmittingAction] = useState<"check-in" | "check-out" | null>(null);
+  const [submittingAction, setSubmittingAction] = useState<"check-in" | "check-out" | "switch-location" | null>(null);
 
   const staffById = useMemo(
     () => new Map(staff.map((member) => [member.id, member])),
@@ -115,7 +116,7 @@ export function AttendancePage() {
   }, [profile]);
 
   useEffect(() => {
-    if (activeEntry?.locationId) {
+    if (activeEntry?.locationId && (!selectedLocationId || !workLocationOptions.some((location) => location.id === selectedLocationId))) {
       setSelectedLocationId(activeEntry.locationId);
       return;
     }
@@ -191,6 +192,32 @@ export function AttendancePage() {
     }
   }
 
+  async function handleSwitchLocation() {
+    if (!activeEntry) {
+      return;
+    }
+
+    try {
+      if (!selectedLocation) {
+        throw new Error("Work location is required.");
+      }
+
+      setSubmittingAction("switch-location");
+      if (locationCheckInRequired) {
+        await collectVerifiedAttendanceLocation(selectedLocation);
+      }
+      const entry = await switchAttendanceLocation(activeEntry, selectedLocationId, new Date());
+      setActiveEntry(entry);
+      setTodayEntries((current) => current.map((item) => item.id === entry.id ? entry : item));
+      setError(null);
+      await refreshActiveAttendance();
+    } catch (switchError) {
+      setError(switchError instanceof Error ? switchError.message : "Unable to switch location.");
+    } finally {
+      setSubmittingAction(null);
+    }
+  }
+
   if (!profile) {
     return null;
   }
@@ -203,7 +230,13 @@ export function AttendancePage() {
         {error ? <div className="alert alert-danger">{error}</div> : null}
         {submittingAction && locationCheckInRequired ? (
           <p className="muted-copy">
-            Checking location before {submittingAction === "check-in" ? "check in" : "check out"}...
+            Checking location before{" "}
+            {submittingAction === "check-in"
+              ? "check in"
+              : submittingAction === "check-out"
+                ? "check out"
+                : "switching location"}
+            ...
           </p>
         ) : null}
         {!locationCheckInRequired ? (
@@ -229,23 +262,24 @@ export function AttendancePage() {
           ) : null}
         </div>
 
+        <label className="field">
+          <span>{profile && isStoreRole(profile.role) ? "Work store" : "Work location"}</span>
+          <select
+            value={selectedLocationId}
+            onChange={(event) => setSelectedLocationId(event.target.value)}
+            required
+          >
+            <option value="">Select location</option>
+            {workLocationOptions.map((location) => (
+              <option value={location.id} key={location.id}>
+                {location.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         {!activeEntry ? (
           <>
-            <label className="field">
-              <span>{profile && isStoreRole(profile.role) ? "Work store" : "Work location"}</span>
-              <select
-                value={selectedLocationId}
-                onChange={(event) => setSelectedLocationId(event.target.value)}
-                required
-              >
-                <option value="">Select location</option>
-                {workLocationOptions.map((location) => (
-                  <option value={location.id} key={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="field">
               <span>Check-in selfie</span>
               <input
@@ -270,6 +304,19 @@ export function AttendancePage() {
             disabled={Boolean(activeEntry) || !selectedLocationId || !selfieFile || Boolean(submittingAction)}
           >
             {submittingAction === "check-in" ? "Checking..." : "Check in"}
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={handleSwitchLocation}
+            disabled={
+              !activeEntry ||
+              !selectedLocationId ||
+              selectedLocationId === activeEntry.locationId ||
+              Boolean(submittingAction)
+            }
+          >
+            {submittingAction === "switch-location" ? "Checking..." : "Switch location"}
           </button>
           <button
             className="secondary-button"
