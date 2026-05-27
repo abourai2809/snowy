@@ -88,12 +88,14 @@ Manual runs process up to 25 queued selfie checks and include a `dry_run` input 
 
 ## Alerts
 
-The first supported alert destination is a Slack-compatible incoming webhook. Configure this backend-only secret in Vercel and GitHub Actions if alerts should work in both places:
+Supported alert destinations are Slack-compatible webhooks, Discord webhooks, and a generic JSON webhook. Configure this backend-only secret in Vercel and GitHub Actions if alerts should work in both places:
 
 ```bash
 ATTENDANCE_SELFIE_ALERT_WEBHOOK_URL=
 ATTENDANCE_SELFIE_ALERT_WEBHOOK_KIND=slack
 ```
+
+Use `ATTENDANCE_SELFIE_ALERT_WEBHOOK_KIND=discord` for a Discord channel webhook.
 
 Alerts are sent only when Gemini returns `needs_review` or the AI check fails. Dry runs never send alerts. The alert contains staff name, location, date, verdict fields, confidence, and notes. It does not attach the selfie image.
 

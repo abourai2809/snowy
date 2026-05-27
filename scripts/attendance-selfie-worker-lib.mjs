@@ -287,7 +287,7 @@ async function maybeSendSelfieAlert(supabase, config, check, result) {
     const response = await fetch(config.alertWebhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(config.alertWebhookKind === "generic" ? payload : { text: payload.text }),
+      body: JSON.stringify(alertRequestBody(config.alertWebhookKind, payload)),
     });
 
     if (!response.ok) {
@@ -319,6 +319,12 @@ async function loadAlertContext(supabase, attendanceEntryId) {
     staff: staffResult.data,
     location: locationResult.data,
   };
+}
+
+function alertRequestBody(kind, payload) {
+  if (kind === "discord") return { content: payload.text };
+  if (kind === "generic") return payload;
+  return { text: payload.text };
 }
 
 function buildAlertPayload(context, result) {
