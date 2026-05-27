@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import type { AttendanceEntry, AttendanceSelfieCheck } from "../../../domain/attendance";
+import type { AttendanceEntry, AttendanceSelfieCheck, AttendanceSelfieReview } from "../../../domain/attendance";
 import type { Dispatch } from "../../../domain/dispatches";
 import type { DeepFreezerCountWithItems } from "../../../domain/inventory";
 import type { StaffProfile } from "../../../domain/roles";
 import type { InventoryCountWithItems } from "../../../domain/supplies";
 import { listStaff } from "../staff/staffApi";
-import { listAttendanceForDate, listSelfieChecksForAttendanceIds } from "../../attendance/attendanceApi";
+import {
+  listAttendanceForDate,
+  listRecentAttendanceSelfieReviews,
+  listSelfieChecksForAttendanceIds,
+} from "../../attendance/attendanceApi";
 import { listInventoryCounts } from "../../inventory/inventoryApi";
 import { listLabDispatches } from "../../lab/labApi";
 import { listDeepFreezerCounts, MORNING_VERIFICATION_TOLERANCE_KG } from "../../store/deepFreezerApi";
@@ -26,12 +30,22 @@ export function AdminReportsPage() {
   const [emptyPanCounts, setEmptyPanCounts] = useState<StoreEmptyPanCount[]>([]);
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [selfieChecks, setSelfieChecks] = useState<AttendanceSelfieCheck[]>([]);
+  const [recentSelfies, setRecentSelfies] = useState<AttendanceSelfieReview[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadReports() {
-      const [dispatchRows, gelatoRows, morningRows, inventoryRows, emptyPanRows, attendanceRows, staffRows] = await Promise.all([
+      const [
+        dispatchRows,
+        gelatoRows,
+        morningRows,
+        inventoryRows,
+        emptyPanRows,
+        attendanceRows,
+        staffRows,
+        selfieReviewRows,
+      ] = await Promise.all([
         listLabDispatches(),
         listEodGelatoCounts(),
         listDeepFreezerCounts("morning"),
@@ -39,17 +53,19 @@ export function AdminReportsPage() {
         listEmptyPanCountsByStore(),
         listAttendanceForDate(todayDate()),
         listStaff(),
+        listRecentAttendanceSelfieReviews(3),
       ]);
       const selfieRows = await listSelfieChecksForAttendanceIds(attendanceRows.map((entry) => entry.id));
 
-        setDispatches(dispatchRows);
-        setGelatoCounts(gelatoRows);
-        setMorningChecks(morningRows);
-        setInventoryCounts(inventoryRows);
-        setEmptyPanCounts(emptyPanRows);
-        setAttendance(attendanceRows);
-        setSelfieChecks(selfieRows);
-        setStaff(staffRows);
+      setDispatches(dispatchRows);
+      setGelatoCounts(gelatoRows);
+      setMorningChecks(morningRows);
+      setInventoryCounts(inventoryRows);
+      setEmptyPanCounts(emptyPanRows);
+      setAttendance(attendanceRows);
+      setSelfieChecks(selfieRows);
+      setRecentSelfies(selfieReviewRows);
+      setStaff(staffRows);
     }
 
     void loadReports().catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Unable to load reports."));
@@ -149,9 +165,54 @@ export function AdminReportsPage() {
         />
       </section>
 
+      <section className="card">
+        <div className="card-title">Recent attendance selfies</div>
+        {recentSelfies.length === 0 ? <p className="muted-copy">No recent selfies.</p> : null}
+        <SelfieReviewGrid reviews={recentSelfies} staffById={staffById} />
+      </section>
+
       <AdminDeepFreezerTools />
       <EodGelatoCorrectionsPage />
       <CorrectionsPage />
+    </div>
+  );
+}
+
+function SelfieReviewGrid({
+  reviews,
+  staffById,
+}: {
+  reviews: AttendanceSelfieReview[];
+  staffById: Map<string, StaffProfile>;
+}) {
+  if (reviews.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="selfie-review-grid">
+      {reviews.map((review) => (
+        <article className="selfie-review-card" key={review.check?.id ?? review.entry.id}>
+          <div className="selfie-review-image">
+            {review.selfieUrl ? (
+              <img
+                src={review.selfieUrl}
+                alt={`Attendance selfie for ${staffById.get(review.entry.userId)?.name ?? "staff"}`}
+              />
+            ) : (
+              <span>{review.check?.archivedAt ? "Archived" : "Preview unavailable"}</span>
+            )}
+          </div>
+          <div className="selfie-review-meta">
+            <strong>{staffById.get(review.entry.userId)?.name ?? review.entry.userId}</strong>
+            <span>
+              {review.entry.locationId ?? "No location"} / {formatDateTime(review.entry.checkInAt)}
+            </span>
+            <span>{formatSelfieDetail(review.entry, review.check ?? undefined)}</span>
+          </div>
+          <span className="badge">{formatSelfieBadge(review.entry, review.check ?? undefined)}</span>
+        </article>
+      ))}
     </div>
   );
 }
@@ -167,6 +228,15 @@ function formatAttendanceDetail(entry: AttendanceEntry, selfieCheck: AttendanceS
       ? "Out location not captured"
       : "Still checked in";
   return `${location} - ${checkIn} - ${checkOut} - ${formatSelfieDetail(entry, selfieCheck)}`;
+}
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatSelfieBadge(entry: AttendanceEntry, selfieCheck: AttendanceSelfieCheck | undefined): string {

@@ -630,6 +630,65 @@ button {
   text-transform: uppercase;
 }
 
+.selfie-review-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.selfie-review-card {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--cr);
+}
+
+.selfie-review-image {
+  width: 92px;
+  aspect-ratio: 3 / 4;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pkll);
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.selfie-review-image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.selfie-review-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.selfie-review-meta strong {
+  color: var(--ink);
+}
+
+.selfie-review-meta span {
+  color: var(--soft);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.selfie-review-card .badge {
+  grid-column: 2;
+  justify-self: start;
+}
+
 .staff-form,
 .compact-grid {
   display: grid;

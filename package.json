@@ -11,6 +11,7 @@
     "archive:dry-run": "node scripts/archive-dry-run.mjs",
     "worker:queuebuster": "node scripts/queuebuster-worker.mjs",
     "worker:attendance-selfies": "node scripts/attendance-selfie-worker.mjs",
+    "archive:attendance-selfies": "node scripts/archive-attendance-selfies.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

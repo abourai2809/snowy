@@ -53,7 +53,19 @@ export interface AttendanceSelfieCheck {
   notes: string | null;
   errorMessage: string | null;
   checkedAt: string | null;
+  archiveProvider: string | null;
+  archivePath: string | null;
+  archiveFileId: string | null;
+  archivedAt: string | null;
+  storageDeletedAt: string | null;
+  archiveError: string | null;
   createdAt: string;
+}
+
+export interface AttendanceSelfieReview {
+  entry: AttendanceEntry;
+  check: AttendanceSelfieCheck | null;
+  selfieUrl: string | null;
 }
 
 export interface AttendanceLocationTarget {

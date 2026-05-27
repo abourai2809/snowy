@@ -97,6 +97,30 @@ ATTENDANCE_SELFIE_ALERT_WEBHOOK_KIND=slack
 
 Alerts are sent only when Gemini returns `needs_review` or the AI check fails. The alert contains staff name, location, date, verdict fields, confidence, and notes. It does not attach the selfie image.
 
+## Admin Review And Archival
+
+Admin reports show check-in selfies for the recent review window, currently three days. The app creates short-lived signed Supabase Storage URLs for the preview; images remain private.
+
+Older images should be moved to Google Drive by the archive worker:
+
+```bash
+npm run archive:attendance-selfies
+```
+
+Required backend-only archive environment:
+
+```bash
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=
+GOOGLE_DRIVE_ATTENDANCE_SELFIE_FOLDER_ID=
+ATTENDANCE_SELFIE_REVIEW_DAYS=3
+ATTENDANCE_SELFIE_ARCHIVE_MAX=50
+ATTENDANCE_SELFIE_ARCHIVE_DRY_RUN=0
+```
+
+The Google service account must have access to the target Drive folder. The worker uploads each old selfie to that folder, records `archive_provider`, `archive_path`, `archive_file_id`, and `archived_at` in `attendance_selfie_checks`, then removes the private Supabase Storage object and records `storage_deleted_at`.
+
 ## Review Posture
 
 The AI should flag records, not block attendance. A failed or unclear result should become `needs_review` for Admin/manager. This avoids payroll disruption while we tune the prompt against real sample photos.

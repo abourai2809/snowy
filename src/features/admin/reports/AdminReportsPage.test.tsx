@@ -35,7 +35,9 @@ describe("AdminReportsPage", () => {
     await user.click(screen.getByRole("button", { name: "Stores" }));
 
     expect(await screen.findByText("Today roster")).toBeInTheDocument();
-    expect(screen.getByText(storeStaff.name)).toBeInTheDocument();
+    expect(screen.getAllByText(storeStaff.name).length).toBeGreaterThan(0);
+    expect(screen.getByText("Recent attendance selfies")).toBeInTheDocument();
+    expect(screen.getByAltText(`Attendance selfie for ${storeStaff.name}`)).toBeInTheDocument();
   });
 
   it("lets Admin correct historical EOD gelato weights", async () => {

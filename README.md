@@ -42,7 +42,9 @@ QueueBuster jobs are created from the Admin Catalog page and executed by a backe
 
 ## Attendance Selfie Worker
 
-Attendance selfie checks are queued in Supabase and processed by backend code with Gemini. The deployed app requests immediate processing after staff check-in when Vercel has `GEMINI_API_KEY` configured. `.github/workflows/attendance-selfie-checks.yml` remains available as a manual backfill worker. See `docs/attendance-selfie-ai.md`.
+Attendance selfie checks are queued in Supabase and processed by backend code with Gemini. The deployed app requests immediate processing after staff check-in when Vercel has `GEMINI_API_KEY` configured. `.github/workflows/attendance-selfie-checks.yml` remains available as a manual backfill worker.
+
+Admins can review recent attendance selfies in the app for the configured review window, currently three days. Older images are archived by `npm run archive:attendance-selfies` to Google Drive and then removed from the private Supabase Storage bucket. See `docs/attendance-selfie-ai.md`.
 
 ## Product Docs
 

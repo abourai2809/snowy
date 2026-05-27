@@ -6,6 +6,7 @@ import {
   type AttendanceEntry,
   type AttendanceLocationEvidence,
   type AttendanceSelfieCheck,
+  type AttendanceSelfieReview,
 } from "../../domain/attendance";
 import type { StaffProfile } from "../../domain/roles";
 
@@ -47,6 +48,12 @@ function mapSelfieCheckRow(row: Record<string, unknown>): AttendanceSelfieCheck 
     notes: row.notes ? String(row.notes) : null,
     errorMessage: row.error_message ? String(row.error_message) : null,
     checkedAt: row.checked_at ? String(row.checked_at) : null,
+    archiveProvider: row.archive_provider ? String(row.archive_provider) : null,
+    archivePath: row.archive_path ? String(row.archive_path) : null,
+    archiveFileId: row.archive_file_id ? String(row.archive_file_id) : null,
+    archivedAt: row.archived_at ? String(row.archived_at) : null,
+    storageDeletedAt: row.storage_deleted_at ? String(row.storage_deleted_at) : null,
+    archiveError: row.archive_error ? String(row.archive_error) : null,
     createdAt: String(row.created_at),
   };
 }
@@ -169,6 +176,61 @@ export async function listSelfieChecksForAttendanceIds(attendanceEntryIds: strin
   return data.map(mapSelfieCheckRow);
 }
 
+export async function listRecentAttendanceSelfieReviews(days = 3): Promise<AttendanceSelfieReview[]> {
+  if (!isSupabaseConfigured) {
+    const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+    return sortAttendance(demoAttendance)
+      .filter((entry) => entry.selfieInUrl && new Date(entry.checkInAt).getTime() >= cutoffMs)
+      .map((entry) => ({
+        entry,
+        check: demoSelfieChecks.find((check) => check.attendanceEntryId === entry.id) ?? null,
+        selfieUrl: entry.selfieInUrl,
+      }));
+  }
+
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from("attendance_entries")
+    .select("*")
+    .gte("check_in_at", cutoff)
+    .not("selfie_in_url", "is", null)
+    .order("check_in_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const entries = data.map(mapAttendanceRow);
+  const checks = await listSelfieChecksForAttendanceIds(entries.map((entry) => entry.id));
+  const checkByEntryId = new Map(checks.map((check) => [check.attendanceEntryId, check]));
+
+  return Promise.all(
+    entries.map(async (entry) => {
+      const check = checkByEntryId.get(entry.id) ?? null;
+      const selfiePath = check?.selfiePath ?? entry.selfieInUrl;
+      const selfieUrl = selfiePath && !check?.storageDeletedAt
+        ? await createSelfieSignedUrl(selfiePath)
+        : null;
+      return { entry, check, selfieUrl };
+    }),
+  );
+}
+
+async function createSelfieSignedUrl(path: string): Promise<string | null> {
+  const { data, error } = await requireSupabaseClient()
+    .storage
+    .from("attendance-selfies")
+    .createSignedUrl(path, 10 * 60);
+
+  if (error) {
+    console.warn("Unable to create selfie preview URL.", error);
+    return null;
+  }
+
+  return data.signedUrl;
+}
+
 async function uploadCheckInSelfie(profile: StaffProfile, workDate: string, now: Date, selfieFile: File): Promise<string> {
   const extension = fileExtensionFor(selfieFile);
   const path = `${profile.id}/${workDate}/check-in-${now.getTime()}-${Math.random().toString(16).slice(2)}.${extension}`;
@@ -216,6 +278,12 @@ async function createSelfieCheck(attendanceEntryId: string, selfiePath: string):
       notes: null,
       errorMessage: null,
       checkedAt: null,
+      archiveProvider: null,
+      archivePath: null,
+      archiveFileId: null,
+      archivedAt: null,
+      storageDeletedAt: null,
+      archiveError: null,
       createdAt: new Date().toISOString(),
     };
     demoSelfieChecks.push(check);
