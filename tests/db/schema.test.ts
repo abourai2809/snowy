@@ -35,6 +35,7 @@ const expectedTables = [
   "end_of_day_count_items",
   "inventory_adjustments",
   "attendance_entries",
+  "attendance_selfie_checks",
   "attendance_adjustments",
   "urgent_requirements",
   "urgent_requirement_events",

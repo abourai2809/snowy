@@ -40,6 +40,10 @@ Apply the baseline schema and seed data from `supabase/migrations` and `supabase
 
 QueueBuster jobs are created from the Admin Catalog page and executed by a backend worker, not by frontend code. See `docs/queuebuster-worker.md` for the worker environment, allowlisted command contract, and dry-run mode.
 
+## Attendance Selfie Worker
+
+Attendance selfie checks are queued in Supabase and processed by a backend worker with Gemini. See `docs/attendance-selfie-ai.md`.
+
 ## Product Docs
 
 - `docs/product-feature-inventory.md` is the current source list of implemented and planned app features.

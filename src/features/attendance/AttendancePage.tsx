@@ -3,7 +3,15 @@ import { isCheckedOut, type AttendanceEntry } from "../../domain/attendance";
 import type { LocationOption, StaffProfile } from "../../domain/roles";
 import { isLabRole, isStoreRole, ROLE_LABELS } from "../../domain/roles";
 import { useAuth } from "../auth/AuthProvider";
-import { checkIn, checkOut, getActiveAttendance, listAttendanceForDate, listTodayAttendanceForUser } from "./attendanceApi";
+import {
+  checkIn,
+  checkOut,
+  getActiveAttendance,
+  listAttendanceForDate,
+  listSelfieChecksForAttendanceIds,
+  listTodayAttendanceForUser,
+} from "./attendanceApi";
+import type { AttendanceSelfieCheck } from "../../domain/attendance";
 import { collectVerifiedAttendanceLocation } from "./locationEvidence";
 import { listLocations, listStaff } from "../admin/staff/staffApi";
 import { getOperationsSettings, type OperationsSettings } from "../settings/operationsSettingsApi";
@@ -14,9 +22,12 @@ export function AttendancePage() {
   const [todayEntries, setTodayEntries] = useState<AttendanceEntry[]>([]);
   const [roster, setRoster] = useState<AttendanceEntry[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
+  const [selfieChecks, setSelfieChecks] = useState<AttendanceSelfieCheck[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [settings, setSettings] = useState<OperationsSettings | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState("");
+  const [selfieFile, setSelfieFile] = useState<File | null>(null);
+  const [selfieInputKey, setSelfieInputKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submittingAction, setSubmittingAction] = useState<"check-in" | "check-out" | null>(null);
@@ -44,6 +55,13 @@ export function AttendancePage() {
   const todayHours = todayEntries.reduce((total, entry) => total + (entry.hours ?? 0), 0);
   const selectedLocation = selectedLocationId ? locationById.get(selectedLocationId) ?? null : null;
   const locationCheckInRequired = settings?.locationCheckInRequired ?? true;
+  const selfieCheckByEntryId = useMemo(() => {
+    const checks = new Map<string, AttendanceSelfieCheck>();
+    selfieChecks.forEach((check) => {
+      checks.set(check.attendanceEntryId, check);
+    });
+    return checks;
+  }, [selfieChecks]);
 
   useEffect(() => {
     let active = true;
@@ -63,12 +81,16 @@ export function AttendancePage() {
           listLocations(),
           getOperationsSettings(),
         ]);
+        const selfieRows = await listSelfieChecksForAttendanceIds(
+          [...entryRows, ...rosterRows].map((attendanceEntry) => attendanceEntry.id),
+        );
 
         if (active) {
           setActiveEntry(entry);
           setTodayEntries(entryRows);
           setRoster(rosterRows);
           setStaff(staffRows);
+          setSelfieChecks(selfieRows);
           setLocations(locationRows);
           setSettings(operationsSettings);
           setSelectedLocationId(entry?.locationId ?? entryRows.at(-1)?.locationId ?? profile.defaultLocationId ?? "");
@@ -118,14 +140,21 @@ export function AttendancePage() {
       if (!selectedLocation) {
         throw new Error("Work location is required.");
       }
+      if (!selfieFile) {
+        throw new Error("Check-in selfie is required.");
+      }
 
       setSubmittingAction("check-in");
       const locationEvidence = locationCheckInRequired
         ? await collectVerifiedAttendanceLocation(selectedLocation)
         : null;
-      const entry = await checkIn(profile, selectedLocationId, new Date(), locationEvidence);
+      const entry = await checkIn(profile, selectedLocationId, new Date(), locationEvidence, selfieFile);
+      const checks = await listSelfieChecksForAttendanceIds([entry.id]);
       setActiveEntry(entry);
       setTodayEntries((current) => [...current, entry]);
+      setSelfieChecks((current) => [...current.filter((check) => check.attendanceEntryId !== entry.id), ...checks]);
+      setSelfieFile(null);
+      setSelfieInputKey((current) => current + 1);
       setError(null);
       await refreshActiveAttendance();
     } catch (checkInError) {
@@ -201,21 +230,36 @@ export function AttendancePage() {
         </div>
 
         {!activeEntry ? (
-          <label className="field">
-            <span>{profile && isStoreRole(profile.role) ? "Work store" : "Work location"}</span>
-            <select
-              value={selectedLocationId}
-              onChange={(event) => setSelectedLocationId(event.target.value)}
-              required
-            >
-              <option value="">Select location</option>
-              {workLocationOptions.map((location) => (
-                <option value={location.id} key={location.id}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <>
+            <label className="field">
+              <span>{profile && isStoreRole(profile.role) ? "Work store" : "Work location"}</span>
+              <select
+                value={selectedLocationId}
+                onChange={(event) => setSelectedLocationId(event.target.value)}
+                required
+              >
+                <option value="">Select location</option>
+                {workLocationOptions.map((location) => (
+                  <option value={location.id} key={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Check-in selfie</span>
+              <input
+                key={selfieInputKey}
+                aria-label="Check-in selfie"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                capture="user"
+                onChange={(event) => setSelfieFile(event.target.files?.[0] ?? null)}
+                required
+              />
+              <small>Apron, headwear, gloved thumbs-up</small>
+            </label>
+          </>
         ) : null}
 
         <div className="action-row">
@@ -223,7 +267,7 @@ export function AttendancePage() {
             className="primary-button"
             type="button"
             onClick={handleCheckIn}
-            disabled={Boolean(activeEntry) || !selectedLocationId || Boolean(submittingAction)}
+            disabled={Boolean(activeEntry) || !selectedLocationId || !selfieFile || Boolean(submittingAction)}
           >
             {submittingAction === "check-in" ? "Checking..." : "Check in"}
           </button>
@@ -257,6 +301,9 @@ export function AttendancePage() {
                   {entry.checkOutLocation ? (
                     <span>{formatLocationEvidence("Out", entry.checkOutLocation.distanceM, entry.checkOutLocation.accuracyM)}</span>
                   ) : null}
+                  {entry.selfieInUrl ? (
+                    <span>{formatSelfieCheck(selfieCheckByEntryId.get(entry.id))}</span>
+                  ) : null}
                 </div>
                 <span className="badge">{entry.checkOutAt ? `${entry.hours ?? 0}h` : "In"}</span>
               </div>
@@ -288,6 +335,9 @@ export function AttendancePage() {
                       {entry.checkOutLocation ? (
                         <span>{formatLocationEvidence("Out", entry.checkOutLocation.distanceM, entry.checkOutLocation.accuracyM)}</span>
                       ) : null}
+                      {entry.selfieInUrl ? (
+                        <span>{formatSelfieCheck(selfieCheckByEntryId.get(entry.id))}</span>
+                      ) : null}
                     </div>
                     <span className="badge">{entry.checkOutAt ? "Out" : "In"}</span>
                   </div>
@@ -309,4 +359,20 @@ function formatLocationEvidence(label: string, distanceM: number | null, accurac
   const distance = distanceM === null ? "distance n/a" : `${Math.round(distanceM)}m away`;
   const accuracy = accuracyM === null ? "accuracy n/a" : `accuracy ${Math.round(accuracyM)}m`;
   return `${label} location: ${distance}, ${accuracy}`;
+}
+
+function formatSelfieCheck(check: AttendanceSelfieCheck | undefined): string {
+  if (!check) {
+    return "Selfie check: queued";
+  }
+
+  if (check.status === "queued" || check.status === "running") {
+    return `Selfie check: ${check.status}`;
+  }
+
+  if (check.status === "failed") {
+    return "Selfie check: needs review";
+  }
+
+  return `Selfie check: ${check.overallStatus?.replace("_", " ") ?? "needs review"}`;
 }

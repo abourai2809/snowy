@@ -55,6 +55,10 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - Admin must approve staff signup before staff can use the app.
 - Staff can check in and check out multiple times in one day for multiple shifts.
 - Staff choose the store/lab location at check-in.
+- Staff submit a check-in selfie for uniform verification.
+- Check-in selfies are stored in private Supabase Storage and queued for AI review.
+- Gemini validates apron, headwear/hair covering, and gloved thumbs-up evidence.
+- AI review results are flags for Admin/manager review, not hard attendance blockers.
 - The active checked-in location is shown in the app header and drives store-specific workflows.
 - Location verification can be enforced or disabled by Admin.
 - Attendance stores check-in/out timestamps, location, and verification metadata where available.
@@ -118,4 +122,3 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - Detailed pan-to-pan consolidation/refill tracking.
 - Native mobile app.
 - Advanced analytics and AI recommendations.
-

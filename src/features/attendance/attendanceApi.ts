@@ -5,10 +5,12 @@ import {
   isCheckedOut,
   type AttendanceEntry,
   type AttendanceLocationEvidence,
+  type AttendanceSelfieCheck,
 } from "../../domain/attendance";
 import type { StaffProfile } from "../../domain/roles";
 
 let demoAttendance: AttendanceEntry[] = [];
+let demoSelfieChecks: AttendanceSelfieCheck[] = [];
 
 function mapAttendanceRow(row: Record<string, unknown>): AttendanceEntry {
   return {
@@ -22,6 +24,30 @@ function mapAttendanceRow(row: Record<string, unknown>): AttendanceEntry {
     status: row.status as AttendanceEntry["status"],
     checkInLocation: mapLocationEvidence(row, "check_in"),
     checkOutLocation: mapLocationEvidence(row, "check_out"),
+    selfieInUrl: row.selfie_in_url ? String(row.selfie_in_url) : null,
+    selfieOutUrl: row.selfie_out_url ? String(row.selfie_out_url) : null,
+  };
+}
+
+function mapSelfieCheckRow(row: Record<string, unknown>): AttendanceSelfieCheck {
+  return {
+    id: String(row.id),
+    attendanceEntryId: String(row.attendance_entry_id),
+    selfieKind: row.selfie_kind as AttendanceSelfieCheck["selfieKind"],
+    selfiePath: String(row.selfie_path),
+    status: row.status as AttendanceSelfieCheck["status"],
+    overallStatus: row.overall_status ? (row.overall_status as AttendanceSelfieCheck["overallStatus"]) : null,
+    apronStatus: row.apron_status ? (row.apron_status as AttendanceSelfieCheck["apronStatus"]) : null,
+    headwearStatus: row.headwear_status ? (row.headwear_status as AttendanceSelfieCheck["headwearStatus"]) : null,
+    gloveThumbsUpStatus: row.glove_thumbs_up_status
+      ? (row.glove_thumbs_up_status as AttendanceSelfieCheck["gloveThumbsUpStatus"])
+      : null,
+    confidence: row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
+    model: row.model ? String(row.model) : null,
+    notes: row.notes ? String(row.notes) : null,
+    errorMessage: row.error_message ? String(row.error_message) : null,
+    checkedAt: row.checked_at ? String(row.checked_at) : null,
+    createdAt: String(row.created_at),
   };
 }
 
@@ -67,6 +93,7 @@ function buildLocationColumns(prefix: "check_in" | "check_out", evidence?: Atten
 
 export function resetDemoAttendanceData() {
   demoAttendance = [];
+  demoSelfieChecks = [];
 }
 
 function sortAttendance(entries: AttendanceEntry[]): AttendanceEntry[] {
@@ -120,14 +147,112 @@ export async function listAttendanceForDate(date = getTodayKey()): Promise<Atten
   return data.map(mapAttendanceRow);
 }
 
+export async function listSelfieChecksForAttendanceIds(attendanceEntryIds: string[]): Promise<AttendanceSelfieCheck[]> {
+  if (attendanceEntryIds.length === 0) {
+    return [];
+  }
+
+  if (!isSupabaseConfigured) {
+    return demoSelfieChecks.filter((check) => attendanceEntryIds.includes(check.attendanceEntryId));
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("attendance_selfie_checks")
+    .select("*")
+    .in("attendance_entry_id", attendanceEntryIds)
+    .order("created_at");
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapSelfieCheckRow);
+}
+
+async function uploadCheckInSelfie(profile: StaffProfile, workDate: string, now: Date, selfieFile: File): Promise<string> {
+  const extension = fileExtensionFor(selfieFile);
+  const path = `${profile.id}/${workDate}/check-in-${now.getTime()}-${Math.random().toString(16).slice(2)}.${extension}`;
+
+  if (!isSupabaseConfigured) {
+    return path;
+  }
+
+  const { error } = await requireSupabaseClient()
+    .storage
+    .from("attendance-selfies")
+    .upload(path, selfieFile, {
+      contentType: selfieFile.type || "image/jpeg",
+      upsert: false,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return path;
+}
+
+function fileExtensionFor(file: File): string {
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  if (file.name.includes(".")) return file.name.split(".").at(-1)?.toLowerCase() || "jpg";
+  return "jpg";
+}
+
+async function createSelfieCheck(attendanceEntryId: string, selfiePath: string): Promise<AttendanceSelfieCheck> {
+  if (!isSupabaseConfigured) {
+    const check: AttendanceSelfieCheck = {
+      id: `selfie-check-${Date.now()}-${demoSelfieChecks.length}`,
+      attendanceEntryId,
+      selfieKind: "check_in",
+      selfiePath,
+      status: "queued",
+      overallStatus: null,
+      apronStatus: null,
+      headwearStatus: null,
+      gloveThumbsUpStatus: null,
+      confidence: null,
+      model: null,
+      notes: null,
+      errorMessage: null,
+      checkedAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    demoSelfieChecks.push(check);
+    return check;
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("attendance_selfie_checks")
+    .insert({
+      attendance_entry_id: attendanceEntryId,
+      selfie_kind: "check_in",
+      selfie_path: selfiePath,
+      status: "queued",
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapSelfieCheckRow(data);
+}
+
 export async function checkIn(
   profile: StaffProfile,
   locationId: string | null,
   now = new Date(),
   locationEvidence?: AttendanceLocationEvidence | null,
+  selfieFile?: File | null,
 ): Promise<AttendanceEntry> {
   if (!locationId) {
     throw new Error("Work location is required.");
+  }
+
+  if (!selfieFile) {
+    throw new Error("Check-in selfie is required.");
   }
 
   const workDate = getTodayKey(now);
@@ -136,6 +261,8 @@ export async function checkIn(
   if (existing) {
     throw new Error("Attendance is already active. Check out before starting another shift.");
   }
+
+  const selfiePath = await uploadCheckInSelfie(profile, workDate, now, selfieFile);
 
   if (!isSupabaseConfigured) {
     const created: AttendanceEntry = {
@@ -149,8 +276,11 @@ export async function checkIn(
       status: "active",
       checkInLocation: locationEvidence ?? null,
       checkOutLocation: null,
+      selfieInUrl: selfiePath,
+      selfieOutUrl: null,
     };
     demoAttendance.push(created);
+    await createSelfieCheck(created.id, selfiePath);
     return created;
   }
 
@@ -162,6 +292,7 @@ export async function checkIn(
       work_date: workDate,
       check_in_at: now.toISOString(),
       status: "active",
+      selfie_in_url: selfiePath,
       ...buildLocationColumns("check_in", locationEvidence),
     })
     .select()
@@ -171,7 +302,9 @@ export async function checkIn(
     throw error;
   }
 
-  return mapAttendanceRow(data);
+  const entry = mapAttendanceRow(data);
+  await createSelfieCheck(entry.id, selfiePath);
+  return entry;
 }
 
 export async function checkOut(

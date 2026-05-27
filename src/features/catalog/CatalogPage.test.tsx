@@ -110,7 +110,13 @@ describe("CatalogPage", () => {
 async function checkInStoreStaff(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Attendance" }));
   await screen.findByLabelText("Work store");
+  await uploadCheckInSelfie(user);
   await user.click(screen.getByRole("button", { name: "Check in" }));
   expect(await screen.findByText("Checked in")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Store" }));
+}
+
+async function uploadCheckInSelfie(user: ReturnType<typeof userEvent.setup>) {
+  const file = new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" });
+  await user.upload(await screen.findByLabelText("Check-in selfie"), file);
 }

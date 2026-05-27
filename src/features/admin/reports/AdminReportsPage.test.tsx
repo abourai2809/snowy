@@ -29,7 +29,7 @@ describe("AdminReportsPage", () => {
   it("shows the attendance roster in Admin store oversight", async () => {
     const user = userEvent.setup();
     const storeStaff = getDemoStaffByRole("store_staff");
-    await checkIn(storeStaff, storeStaff.defaultLocationId, new Date());
+    await checkIn(storeStaff, storeStaff.defaultLocationId, new Date(), null, selfieFile());
 
     renderApp(<App initialRole="admin" />);
     await user.click(screen.getByRole("button", { name: "Stores" }));
@@ -105,4 +105,8 @@ async function seedHistoricalEodGelatoCount() {
     actorLocationId: "malsi",
     items: [{ panUuid: production.pans[0].id, weightKg: 3.5 }],
   });
+}
+
+function selfieFile() {
+  return new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" });
 }

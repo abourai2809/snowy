@@ -1,4 +1,7 @@
 export type AttendanceStatus = "active" | "checked_out" | "corrected" | "void";
+export type AttendanceSelfieCheckStatus = "queued" | "running" | "succeeded" | "failed";
+export type AttendanceSelfieSignal = "pass" | "fail" | "unclear";
+export type AttendanceSelfieOverallStatus = "pass" | "needs_review";
 export type AttendanceLocationStatus =
   | "verified"
   | "denied"
@@ -31,6 +34,26 @@ export interface AttendanceEntry {
   status: AttendanceStatus;
   checkInLocation: AttendanceLocationEvidence | null;
   checkOutLocation: AttendanceLocationEvidence | null;
+  selfieInUrl: string | null;
+  selfieOutUrl: string | null;
+}
+
+export interface AttendanceSelfieCheck {
+  id: string;
+  attendanceEntryId: string;
+  selfieKind: "check_in" | "check_out";
+  selfiePath: string;
+  status: AttendanceSelfieCheckStatus;
+  overallStatus: AttendanceSelfieOverallStatus | null;
+  apronStatus: AttendanceSelfieSignal | null;
+  headwearStatus: AttendanceSelfieSignal | null;
+  gloveThumbsUpStatus: AttendanceSelfieSignal | null;
+  confidence: number | null;
+  model: string | null;
+  notes: string | null;
+  errorMessage: string | null;
+  checkedAt: string | null;
+  createdAt: string;
 }
 
 export interface AttendanceLocationTarget {

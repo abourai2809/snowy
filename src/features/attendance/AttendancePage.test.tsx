@@ -28,6 +28,7 @@ describe("AttendancePage", () => {
     expect(await screen.findByText("Not checked in")).toBeInTheDocument();
     expect(await screen.findByLabelText("Work store")).toHaveValue("malsi");
 
+    await uploadCheckInSelfie(user);
     await user.click(screen.getByRole("button", { name: "Check in" }));
     expect(await screen.findByText("Checked in")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check in" })).toBeDisabled();
@@ -35,19 +36,23 @@ describe("AttendancePage", () => {
     await user.click(screen.getByRole("button", { name: "Check out" }));
     expect(await screen.findByText("Checked out")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check out" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Check in" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Check in" })).toBeDisabled();
     expect(screen.getByLabelText("Today's shifts")).toHaveTextContent("Shift 1");
 
+    await uploadCheckInSelfie(user);
+    expect(screen.getByRole("button", { name: "Check in" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Check in" }));
     expect(await screen.findByText("Checked in")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check in" })).toBeDisabled();
     expect(screen.getByLabelText("Today's shifts")).toHaveTextContent("Shift 2");
+    expect(screen.getByLabelText("Today's shifts")).toHaveTextContent("Selfie check: queued");
   });
 
   it("shows today's attendance roster to Admin", async () => {
     const staffUser = userEvent.setup();
     const { unmount } = renderApp(<App initialRole="store_staff" />);
     await staffUser.click(screen.getByRole("button", { name: "Attendance" }));
+    await uploadCheckInSelfie(staffUser);
     await staffUser.click(await screen.findByRole("button", { name: "Check in" }));
     await waitFor(() => expect(screen.getByText("Checked in")).toBeInTheDocument());
     unmount();
@@ -66,6 +71,7 @@ describe("AttendancePage", () => {
     await user.click(screen.getByRole("button", { name: "Attendance" }));
     await user.selectOptions(await screen.findByLabelText("Work store"), "rajpur");
     mockDeviceLocation(RAJPUR_LOCATION);
+    await uploadCheckInSelfie(user);
     await user.click(screen.getByRole("button", { name: "Check in" }));
 
     await waitFor(() => expect(screen.getByText("Checked in")).toBeInTheDocument());
@@ -91,6 +97,7 @@ describe("AttendancePage", () => {
 
     renderApp(<App initialRole="store_staff" />);
     await user.click(screen.getByRole("button", { name: "Attendance" }));
+    await uploadCheckInSelfie(user);
     await user.click(await screen.findByRole("button", { name: "Check in" }));
 
     expect(await screen.findByText(/Location permission was denied/)).toBeInTheDocument();
@@ -104,10 +111,21 @@ describe("AttendancePage", () => {
 
     renderApp(<App initialRole="store_staff" />);
     await user.click(screen.getByRole("button", { name: "Attendance" }));
+    await uploadCheckInSelfie(user);
     await user.click(await screen.findByRole("button", { name: "Check in" }));
 
     expect(await screen.findByText("Checked in")).toBeInTheDocument();
     expect(screen.getByText(/Location verification is off/)).toBeInTheDocument();
+  });
+
+  it("requires a check-in selfie", async () => {
+    const user = userEvent.setup();
+
+    renderApp(<App initialRole="store_staff" />);
+    await user.click(screen.getByRole("button", { name: "Attendance" }));
+
+    expect(await screen.findByLabelText("Check-in selfie")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check in" })).toBeDisabled();
   });
 });
 
@@ -183,4 +201,9 @@ async function seedIncomingRajpurPan() {
     dispatchedBy: "staff-lab",
     notes: null,
   });
+}
+
+async function uploadCheckInSelfie(user: ReturnType<typeof userEvent.setup>) {
+  const file = new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" });
+  await user.upload(await screen.findByLabelText("Check-in selfie"), file);
 }
