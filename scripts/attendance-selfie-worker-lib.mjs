@@ -277,7 +277,7 @@ async function failCheck(supabase, checkId, message) {
 }
 
 async function maybeSendSelfieAlert(supabase, config, check, result) {
-  if (!config.alertWebhookUrl || result.overallStatus === "pass") {
+  if (config.dryRun || !config.alertWebhookUrl || result.overallStatus === "pass") {
     return;
   }
 

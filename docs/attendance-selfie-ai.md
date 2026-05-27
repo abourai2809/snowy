@@ -95,7 +95,7 @@ ATTENDANCE_SELFIE_ALERT_WEBHOOK_URL=
 ATTENDANCE_SELFIE_ALERT_WEBHOOK_KIND=slack
 ```
 
-Alerts are sent only when Gemini returns `needs_review` or the AI check fails. The alert contains staff name, location, date, verdict fields, confidence, and notes. It does not attach the selfie image.
+Alerts are sent only when Gemini returns `needs_review` or the AI check fails. Dry runs never send alerts. The alert contains staff name, location, date, verdict fields, confidence, and notes. It does not attach the selfie image.
 
 ## Admin Review And Archival
 
