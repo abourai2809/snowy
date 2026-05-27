@@ -17,6 +17,7 @@ import { RequireRole } from "../features/auth/RequireRole";
 import { AttendancePage } from "../features/attendance/AttendancePage";
 import { StaffPage } from "../features/admin/staff/StaffPage";
 import { AdminReportsPage } from "../features/admin/reports/AdminReportsPage";
+import { AdminReviewPage } from "../features/admin/review/AdminReviewPage";
 import { CatalogPage } from "../features/catalog/CatalogPage";
 import { LabDashboard } from "../features/lab/LabDashboard";
 import { StoreDashboard } from "../features/store/StoreDashboard";
@@ -114,6 +115,10 @@ function RoutePanel({
     ) : routeId === "stores" ? (
       <RequireRole allow={["admin"]}>
         <AdminReportsPage />
+      </RequireRole>
+    ) : routeId === "review" ? (
+      <RequireRole allow={["admin"]}>
+        <AdminReviewPage />
       </RequireRole>
     ) : routeId === "catalog" ? (
       <RequireRole allow={["admin"]}>

@@ -1,21 +1,18 @@
 import { useEffect, useState } from "react";
-import type { AttendanceEntry, AttendanceSelfieCheck, AttendanceSelfieReview } from "../../../domain/attendance";
+import type { AttendanceEntry, AttendanceSelfieCheck } from "../../../domain/attendance";
 import type { Dispatch } from "../../../domain/dispatches";
 import type { DeepFreezerCountWithItems } from "../../../domain/inventory";
 import type { StaffProfile } from "../../../domain/roles";
 import type { InventoryCountWithItems } from "../../../domain/supplies";
 import { listStaff } from "../staff/staffApi";
-import {
-  listAttendanceForDate,
-  listRecentAttendanceSelfieReviews,
-  listSelfieChecksForAttendanceIds,
-} from "../../attendance/attendanceApi";
+import { listAttendanceForDate, listSelfieChecksForAttendanceIds } from "../../attendance/attendanceApi";
 import { listInventoryCounts } from "../../inventory/inventoryApi";
 import { listLabDispatches } from "../../lab/labApi";
 import { listDeepFreezerCounts, MORNING_VERIFICATION_TOLERANCE_KG } from "../../store/deepFreezerApi";
 import { listEmptyPanCountsByStore, listEodGelatoCounts, type EodCountWithItems, type StoreEmptyPanCount } from "../../store/storeApi";
 import { CorrectionsPage } from "../corrections/CorrectionsPage";
 import { EodGelatoCorrectionsPage } from "../corrections/EodGelatoCorrectionsPage";
+import { AttendanceSelfieReviewPanel, formatSelfieBadge, formatSelfieDetail } from "../review/AttendanceSelfieReviewPanel";
 import { AdminDeepFreezerTools } from "./AdminDeepFreezerTools";
 
 function todayDate(): string {
@@ -30,7 +27,6 @@ export function AdminReportsPage() {
   const [emptyPanCounts, setEmptyPanCounts] = useState<StoreEmptyPanCount[]>([]);
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [selfieChecks, setSelfieChecks] = useState<AttendanceSelfieCheck[]>([]);
-  const [recentSelfies, setRecentSelfies] = useState<AttendanceSelfieReview[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +40,6 @@ export function AdminReportsPage() {
         emptyPanRows,
         attendanceRows,
         staffRows,
-        selfieReviewRows,
       ] = await Promise.all([
         listLabDispatches(),
         listEodGelatoCounts(),
@@ -53,7 +48,6 @@ export function AdminReportsPage() {
         listEmptyPanCountsByStore(),
         listAttendanceForDate(todayDate()),
         listStaff(),
-        listRecentAttendanceSelfieReviews(3),
       ]);
       const selfieRows = await listSelfieChecksForAttendanceIds(attendanceRows.map((entry) => entry.id));
 
@@ -64,7 +58,6 @@ export function AdminReportsPage() {
       setEmptyPanCounts(emptyPanRows);
       setAttendance(attendanceRows);
       setSelfieChecks(selfieRows);
-      setRecentSelfies(selfieReviewRows);
       setStaff(staffRows);
     }
 
@@ -165,54 +158,11 @@ export function AdminReportsPage() {
         />
       </section>
 
-      <section className="card">
-        <div className="card-title">Recent attendance selfies</div>
-        {recentSelfies.length === 0 ? <p className="muted-copy">No recent selfies.</p> : null}
-        <SelfieReviewGrid reviews={recentSelfies} staffById={staffById} />
-      </section>
+      <AttendanceSelfieReviewPanel title="Recent attendance selfies" />
 
       <AdminDeepFreezerTools />
       <EodGelatoCorrectionsPage />
       <CorrectionsPage />
-    </div>
-  );
-}
-
-function SelfieReviewGrid({
-  reviews,
-  staffById,
-}: {
-  reviews: AttendanceSelfieReview[];
-  staffById: Map<string, StaffProfile>;
-}) {
-  if (reviews.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="selfie-review-grid">
-      {reviews.map((review) => (
-        <article className="selfie-review-card" key={review.check?.id ?? review.entry.id}>
-          <div className="selfie-review-image">
-            {review.selfieUrl ? (
-              <img
-                src={review.selfieUrl}
-                alt={`Attendance selfie for ${staffById.get(review.entry.userId)?.name ?? "staff"}`}
-              />
-            ) : (
-              <span>{review.check?.archivedAt ? "Archived" : "Preview unavailable"}</span>
-            )}
-          </div>
-          <div className="selfie-review-meta">
-            <strong>{staffById.get(review.entry.userId)?.name ?? review.entry.userId}</strong>
-            <span>
-              {review.entry.locationId ?? "No location"} / {formatDateTime(review.entry.checkInAt)}
-            </span>
-            <span>{formatSelfieDetail(review.entry, review.check ?? undefined)}</span>
-          </div>
-          <span className="badge">{formatSelfieBadge(review.entry, review.check ?? undefined)}</span>
-        </article>
-      ))}
     </div>
   );
 }
@@ -228,40 +178,6 @@ function formatAttendanceDetail(entry: AttendanceEntry, selfieCheck: AttendanceS
       ? "Out location not captured"
       : "Still checked in";
   return `${location} - ${checkIn} - ${checkOut} - ${formatSelfieDetail(entry, selfieCheck)}`;
-}
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatSelfieBadge(entry: AttendanceEntry, selfieCheck: AttendanceSelfieCheck | undefined): string {
-  if (!entry.selfieInUrl) return entry.status;
-  if (!selfieCheck) return "selfie queued";
-  if (selfieCheck.status === "queued" || selfieCheck.status === "running") return `selfie ${selfieCheck.status}`;
-  if (selfieCheck.status === "failed") return "selfie failed";
-  return selfieCheck.overallStatus?.replace("_", " ") ?? "needs review";
-}
-
-function formatSelfieDetail(entry: AttendanceEntry, selfieCheck: AttendanceSelfieCheck | undefined): string {
-  if (!entry.selfieInUrl) return "No selfie";
-  if (!selfieCheck) return "Selfie queued";
-  if (selfieCheck.status === "queued" || selfieCheck.status === "running") return `Selfie ${selfieCheck.status}`;
-  if (selfieCheck.status === "failed") return `Selfie failed: ${selfieCheck.errorMessage ?? "needs review"}`;
-
-  const confidence = selfieCheck.confidence === null ? "confidence n/a" : `${Math.round(selfieCheck.confidence * 100)}% confidence`;
-  const notes = selfieCheck.notes ? ` / ${selfieCheck.notes}` : "";
-  return [
-    `Selfie ${selfieCheck.overallStatus?.replace("_", " ") ?? "needs review"}`,
-    `apron ${selfieCheck.apronStatus ?? "unclear"}`,
-    `headwear ${selfieCheck.headwearStatus ?? "unclear"}`,
-    `glove ${selfieCheck.gloveThumbsUpStatus ?? "unclear"}`,
-    confidence,
-  ].join(" / ") + notes;
 }
 
 function ReportRows({ rows }: { rows: Array<{ id: string; title: string; detail: string; badge: string }> }) {
