@@ -49,5 +49,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ATTENDANCE_SELFIE_MODEL: ${{ vars.ATTENDANCE_SELFIE_MODEL || 'gemini-2.5-flash-lite' }}
+          ATTENDANCE_SELFIE_ALERT_WEBHOOK_URL: ${{ secrets.ATTENDANCE_SELFIE_ALERT_WEBHOOK_URL }}
+          ATTENDANCE_SELFIE_ALERT_WEBHOOK_KIND: ${{ vars.ATTENDANCE_SELFIE_ALERT_WEBHOOK_KIND || 'slack' }}
           ATTENDANCE_SELFIE_MAX_CHECKS: 25
           ATTENDANCE_SELFIE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true' && '1' || '0' }}
