@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { App } from "../../../app/App";
 import { getDemoStaffByRole, resetDemoStaffData } from "../staff/staffApi";
-import { checkIn, resetDemoAttendanceData } from "../../attendance/attendanceApi";
+import { checkIn, checkOut, resetDemoAttendanceData } from "../../attendance/attendanceApi";
 import { listFlavours, resetDemoCatalogData } from "../../catalog/catalogApi";
 import { resetDemoInventoryData } from "../../inventory/inventoryApi";
 import { createDispatch, createProduction, resetDemoLabData } from "../../lab/labApi";
@@ -29,11 +29,15 @@ describe("AdminReportsPage", () => {
   it("shows the attendance roster in Admin store oversight", async () => {
     const user = userEvent.setup();
     const storeStaff = getDemoStaffByRole("store_staff");
-    await checkIn(storeStaff, storeStaff.defaultLocationId, new Date(), null, selfieFile());
+    const shift = await checkIn(storeStaff, storeStaff.defaultLocationId, new Date(), null, selfieFile());
+    await checkOut(shift, new Date(new Date(shift.checkInAt).getTime() + 8 * 60 * 60 * 1000));
 
     renderApp(<App initialRole="admin" />);
     await user.click(screen.getByRole("button", { name: "Stores" }));
 
+    expect(await screen.findByText("Monthly attendance review")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Monthly attendance review" })).toBeInTheDocument();
+    expect(screen.getByText("Full day")).toBeInTheDocument();
     expect(await screen.findByText("Today roster")).toBeInTheDocument();
     expect(screen.getAllByText(storeStaff.name).length).toBeGreaterThan(0);
     expect(screen.getByText("Recent attendance selfies")).toBeInTheDocument();

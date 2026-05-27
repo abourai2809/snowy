@@ -12,6 +12,7 @@ const adminProfile: StaffProfile = {
   defaultLocationId: null,
   salaryAmount: 60000,
   salaryType: "monthly",
+  requiredHoursPerDay: 8,
   allowedHolidaysPerMonth: 0,
   bonusDaysBalance: 0,
   active: true,

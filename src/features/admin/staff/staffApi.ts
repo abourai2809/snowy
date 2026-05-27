@@ -64,6 +64,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     defaultLocationId: null,
     salaryAmount: 60000,
     salaryType: "monthly",
+    requiredHoursPerDay: 8,
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
@@ -78,6 +79,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     defaultLocationId: "rajpur",
     salaryAmount: 25000,
     salaryType: "monthly",
+    requiredHoursPerDay: 8,
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
@@ -92,6 +94,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     defaultLocationId: "lab",
     salaryAmount: 30000,
     salaryType: "monthly",
+    requiredHoursPerDay: 8,
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
@@ -106,6 +109,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     defaultLocationId: "malsi",
     salaryAmount: 800,
     salaryType: "daily",
+    requiredHoursPerDay: 8,
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
@@ -120,6 +124,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     defaultLocationId: "lab",
     salaryAmount: 700,
     salaryType: "daily",
+    requiredHoursPerDay: 8,
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
@@ -134,6 +139,7 @@ const initialDemoStaff: DemoStaffProfile[] = [
     defaultLocationId: "mussoorie",
     salaryAmount: 22000,
     salaryType: "monthly",
+    requiredHoursPerDay: 8,
     allowedHolidaysPerMonth: 0,
     bonusDaysBalance: 0,
     active: true,
@@ -163,6 +169,7 @@ function mapUserRow(row: Record<string, unknown>, bonusDaysBalance = 0): StaffPr
     defaultLocationId: row.default_location_id ? String(row.default_location_id) : null,
     salaryAmount: row.salary_amount === null || row.salary_amount === undefined ? null : Number(row.salary_amount),
     salaryType: row.salary_type as SalaryType | null,
+    requiredHoursPerDay: Number(row.required_hours_per_day ?? 8),
     allowedHolidaysPerMonth: Number(row.allowed_holidays_per_month ?? 0),
     bonusDaysBalance,
     active: Boolean(row.active),
@@ -340,6 +347,7 @@ export interface StaffInput {
   defaultLocationId: string | null;
   salaryAmount: number | null;
   salaryType: SalaryType | null;
+  requiredHoursPerDay: number;
   allowedHolidaysPerMonth: number;
   bonusDaysBalance: number;
 }
@@ -390,6 +398,7 @@ export async function requestStaffSignup(input: StaffSignupInput): Promise<Staff
       salaryAmount: null,
       salaryType: "daily",
       allowedHolidaysPerMonth: 0,
+      requiredHoursPerDay: 8,
       bonusDaysBalance: 0,
       active: false,
       signupStatus: "pending",
@@ -457,6 +466,7 @@ export async function saveStaff(input: StaffInput, staffId?: string): Promise<St
     salary_amount: input.salaryAmount,
     salary_type: input.salaryType,
     allowed_holidays_per_month: input.allowedHolidaysPerMonth,
+    required_hours_per_day: input.requiredHoursPerDay,
     signup_status: "approved",
   };
 
@@ -556,6 +566,7 @@ export async function updateHolidaySettings(
   staffId: string,
   allowedHolidaysPerMonth: number,
   bonusDaysBalance: number,
+  requiredHoursPerDay?: number,
 ): Promise<void> {
   if (!isSupabaseConfigured) {
     const existing = demoStaff.find((staff) => staff.id === staffId);
@@ -565,13 +576,23 @@ export async function updateHolidaySettings(
 
     existing.allowedHolidaysPerMonth = allowedHolidaysPerMonth;
     existing.bonusDaysBalance = bonusDaysBalance;
+    if (requiredHoursPerDay !== undefined) {
+      existing.requiredHoursPerDay = requiredHoursPerDay;
+    }
     return;
+  }
+
+  const userPatch: Record<string, number> = {
+    allowed_holidays_per_month: allowedHolidaysPerMonth,
+  };
+  if (requiredHoursPerDay !== undefined) {
+    userPatch.required_hours_per_day = requiredHoursPerDay;
   }
 
   const supabase = requireSupabaseClient();
   const { error: userError } = await supabase
     .from("users")
-    .update({ allowed_holidays_per_month: allowedHolidaysPerMonth })
+    .update(userPatch)
     .eq("id", staffId);
 
   if (userError) {

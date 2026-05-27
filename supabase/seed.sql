@@ -48,17 +48,19 @@ insert into public.users (
   default_location_id,
   salary_amount,
   salary_type,
+  required_hours_per_day,
   allowed_holidays_per_month,
   active,
   signup_status
 ) values
-  ('Arjun Sharma', '9876543210', 'admin', null, 60000, 'monthly', 0, true, 'approved')
+  ('Arjun Sharma', '9876543210', 'admin', null, 60000, 'monthly', 8, 0, true, 'approved')
 on conflict (phone) do update
 set name = excluded.name,
     role = excluded.role,
     default_location_id = excluded.default_location_id,
     salary_amount = excluded.salary_amount,
     salary_type = excluded.salary_type,
+    required_hours_per_day = excluded.required_hours_per_day,
     active = excluded.active,
     signup_status = excluded.signup_status,
     updated_at = now();

@@ -32,6 +32,7 @@ export interface StaffProfile {
   defaultLocationId: string | null;
   salaryAmount: number | null;
   salaryType: SalaryType | null;
+  requiredHoursPerDay: number;
   allowedHolidaysPerMonth: number;
   bonusDaysBalance: number;
   active: boolean;

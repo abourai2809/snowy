@@ -23,6 +23,8 @@ describe("StaffPage", () => {
     await user.type(within(form).getByLabelText("Phone"), "9000001111");
     await user.selectOptions(within(form).getByLabelText("Role"), "store_staff");
     await user.selectOptions(within(form).getByLabelText("Location"), "rajpur");
+    await user.clear(within(form).getByLabelText("Required hours/day"));
+    await user.type(within(form).getByLabelText("Required hours/day"), "7");
     await user.clear(within(form).getByLabelText("Allowed holidays"));
     await user.type(within(form).getByLabelText("Allowed holidays"), "2");
     await user.clear(within(form).getByLabelText("Bonus days"));
@@ -34,11 +36,15 @@ describe("StaffPage", () => {
 
     const row = newStaffRow.closest("article");
     expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText("7h required")).toBeInTheDocument();
+    await user.clear(within(row as HTMLElement).getByLabelText("Required hours/day"));
+    await user.type(within(row as HTMLElement).getByLabelText("Required hours/day"), "8");
     await user.clear(within(row as HTMLElement).getByLabelText("Bonus days"));
     await user.type(within(row as HTMLElement).getByLabelText("Bonus days"), "3");
-    await user.click(within(row as HTMLElement).getByRole("button", { name: "Save holidays" }));
+    await user.click(within(row as HTMLElement).getByRole("button", { name: "Save attendance rules" }));
 
     await waitFor(() => expect(within(row as HTMLElement).getByLabelText("Bonus days")).toHaveValue(3));
+    await waitFor(() => expect(within(row as HTMLElement).getByLabelText("Required hours/day")).toHaveValue(8));
   });
 
   it("does not expose Staff controls to Store Staff", () => {

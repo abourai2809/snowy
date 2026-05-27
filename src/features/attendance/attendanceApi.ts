@@ -154,6 +154,29 @@ export async function listAttendanceForDate(date = getTodayKey()): Promise<Atten
   return data.map(mapAttendanceRow);
 }
 
+export async function listAttendanceForMonth(month: string): Promise<AttendanceEntry[]> {
+  const start = `${month}-01`;
+  const end = nextMonthStart(month);
+
+  if (!isSupabaseConfigured) {
+    return sortAttendance(demoAttendance.filter((entry) => entry.workDate >= start && entry.workDate < end));
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("attendance_entries")
+    .select("*")
+    .gte("work_date", start)
+    .lt("work_date", end)
+    .order("work_date")
+    .order("check_in_at");
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapAttendanceRow);
+}
+
 export async function listSelfieChecksForAttendanceIds(attendanceEntryIds: string[]): Promise<AttendanceSelfieCheck[]> {
   if (attendanceEntryIds.length === 0) {
     return [];
@@ -174,6 +197,14 @@ export async function listSelfieChecksForAttendanceIds(attendanceEntryIds: strin
   }
 
   return data.map(mapSelfieCheckRow);
+}
+
+function nextMonthStart(month: string): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  if (!year || !monthNumber) {
+    throw new Error("Month must be in YYYY-MM format.");
+  }
+  return new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
 }
 
 export async function listRecentAttendanceSelfieReviews(days = 3): Promise<AttendanceSelfieReview[]> {

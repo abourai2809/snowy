@@ -704,6 +704,91 @@ button {
   margin-top: 10px;
 }
 
+.review-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.attendance-review-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.attendance-review-summary div {
+  display: grid;
+  gap: 2px;
+  min-height: 54px;
+  align-content: center;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--pkll);
+}
+
+.attendance-review-summary span {
+  color: var(--soft);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.attendance-review-summary strong {
+  color: var(--pkdd);
+  font-size: 18px;
+}
+
+.review-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.review-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.review-table th,
+.review-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.review-table th {
+  position: sticky;
+  top: 0;
+  background: var(--pkll);
+  color: var(--pkd);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.review-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.review-table td strong,
+.review-table td small {
+  display: block;
+}
+
+.review-table td small {
+  margin-top: 2px;
+  color: var(--soft);
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .staff-row {
   display: grid;
   gap: 9px;
@@ -939,5 +1024,12 @@ button {
     border-radius: 8px;
     overflow: clip;
     box-shadow: var(--shadow);
+  }
+}
+
+@media (max-width: 430px) {
+  .review-controls,
+  .attendance-review-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

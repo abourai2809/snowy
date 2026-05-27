@@ -24,6 +24,7 @@ const emptyForm: StaffInput = {
   defaultLocationId: "rajpur",
   salaryAmount: null,
   salaryType: "daily",
+  requiredHoursPerDay: 8,
   allowedHolidaysPerMonth: 0,
   bonusDaysBalance: 0,
 };
@@ -92,10 +93,15 @@ export function StaffPage() {
 
   async function handleHolidaySave(member: StaffProfile) {
     try {
-      await updateHolidaySettings(member.id, member.allowedHolidaysPerMonth, member.bonusDaysBalance);
+      await updateHolidaySettings(
+        member.id,
+        member.allowedHolidaysPerMonth,
+        member.bonusDaysBalance,
+        member.requiredHoursPerDay,
+      );
       await refresh();
     } catch (holidayError) {
-      setError(holidayError instanceof Error ? holidayError.message : "Unable to update holidays.");
+      setError(holidayError instanceof Error ? holidayError.message : "Unable to update attendance rules.");
     }
   }
 
@@ -238,6 +244,17 @@ export function StaffPage() {
             />
           </label>
           <label className="field">
+            <span>Required hours/day</span>
+            <input
+              type="number"
+              min="0.5"
+              max="24"
+              step="0.5"
+              value={form.requiredHoursPerDay}
+              onChange={(event) => updateForm("requiredHoursPerDay", Number(event.target.value))}
+            />
+          </label>
+          <label className="field">
             <span>Allowed holidays</span>
             <input
               type="number"
@@ -317,9 +334,23 @@ export function StaffPage() {
               <div className="staff-meta">
                 <span>{member.phone}</span>
                 <span>{locationName(member.defaultLocationId)}</span>
+                <span>{member.requiredHoursPerDay}h required</span>
               </div>
 
               <div className="compact-grid">
+                <label className="field">
+                  <span>Required hours/day</span>
+                  <input
+                    type="number"
+                    min="0.5"
+                    max="24"
+                    step="0.5"
+                    value={member.requiredHoursPerDay}
+                    onChange={(event) =>
+                      updateStaffRow(member.id, { requiredHoursPerDay: Number(event.target.value) })
+                    }
+                  />
+                </label>
                 <label className="field">
                   <span>Allowed holidays</span>
                   <input
@@ -342,7 +373,7 @@ export function StaffPage() {
                 </label>
               </div>
               <button className="secondary-button" type="button" onClick={() => handleHolidaySave(member)}>
-                Save holidays
+                Save attendance rules
               </button>
             </article>
           ))}
