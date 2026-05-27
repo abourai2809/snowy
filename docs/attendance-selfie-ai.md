@@ -20,18 +20,22 @@ If sample photos show too many false positives or false negatives, switch `ATTEN
 2. App uploads the image to private bucket `attendance-selfies`.
 3. App creates attendance row with `selfie_in_url` set to the private object path.
 4. App creates `attendance_selfie_checks` row with status `queued`.
-5. Worker downloads queued image with service-role key.
-6. Worker calls Gemini and asks for strict JSON:
+5. App calls `/api/attendance-selfie-checks` with the current login token and attendance entry id.
+6. The Vercel backend verifies that the logged-in staff member owns the attendance entry, then downloads the queued image with the service-role key.
+7. Backend calls Gemini and asks for strict JSON:
    - `apron`
    - `headwear`
    - `glove_thumbs_up`
    - `overall`
    - `confidence`
    - `notes`
-7. Worker writes results to `attendance_selfie_checks`.
-8. Admin/manager review views show queued/pass/needs-review status.
+8. Backend writes results to `attendance_selfie_checks`.
+9. If the result needs review and `ATTENDANCE_SELFIE_ALERT_WEBHOOK_URL` is configured, backend sends an admin alert.
+10. Admin/manager review views show queued/pass/needs-review status.
 
 ## Worker
+
+The deployed Vercel API route processes the selfie immediately after check-in. The CLI/GitHub worker is still useful for manual backfills or retries.
 
 Run once:
 
@@ -52,6 +56,8 @@ SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 GEMINI_API_KEY=
 ATTENDANCE_SELFIE_MODEL=gemini-2.5-flash-lite
+ATTENDANCE_SELFIE_ALERT_WEBHOOK_URL=
+ATTENDANCE_SELFIE_ALERT_WEBHOOK_KIND=slack
 ATTENDANCE_SELFIE_POLL_INTERVAL_MS=30000
 ATTENDANCE_SELFIE_DRY_RUN=0
 ```
@@ -62,7 +68,7 @@ Use `ATTENDANCE_SELFIE_MAX_CHECKS=25` when running in a scheduled job. This drai
 
 ## GitHub Actions
 
-The workflow `.github/workflows/attendance-selfie-checks.yml` runs every 5 minutes and can also be run manually from the GitHub Actions tab.
+The workflow `.github/workflows/attendance-selfie-checks.yml` is a manual backfill worker from the GitHub Actions tab.
 
 Configure these repository secrets:
 
@@ -78,7 +84,18 @@ Optional repository variable:
 ATTENDANCE_SELFIE_MODEL=gemini-2.5-flash-lite
 ```
 
-The scheduled action processes up to 25 queued selfie checks per run. Manual runs include a `dry_run` input for testing the queue without calling Gemini.
+Manual runs process up to 25 queued selfie checks and include a `dry_run` input for testing the queue without calling Gemini.
+
+## Alerts
+
+The first supported alert destination is a Slack-compatible incoming webhook. Configure this backend-only secret in Vercel and GitHub Actions if alerts should work in both places:
+
+```bash
+ATTENDANCE_SELFIE_ALERT_WEBHOOK_URL=
+ATTENDANCE_SELFIE_ALERT_WEBHOOK_KIND=slack
+```
+
+Alerts are sent only when Gemini returns `needs_review` or the AI check fails. The alert contains staff name, location, date, verdict fields, confidence, and notes. It does not attach the selfie image.
 
 ## Review Posture
 

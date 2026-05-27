@@ -240,6 +240,35 @@ async function createSelfieCheck(attendanceEntryId: string, selfiePath: string):
   return mapSelfieCheckRow(data);
 }
 
+async function requestSelfieProcessing(attendanceEntryId: string): Promise<void> {
+  if (!isSupabaseConfigured) {
+    return;
+  }
+
+  try {
+    const { data } = await requireSupabaseClient().auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      return;
+    }
+
+    const response = await fetch("/api/attendance-selfie-checks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ attendanceEntryId }),
+    });
+
+    if (!response.ok) {
+      console.warn("Queued selfie for later processing.", await response.text());
+    }
+  } catch (error) {
+    console.warn("Queued selfie for later processing.", error);
+  }
+}
+
 export async function checkIn(
   profile: StaffProfile,
   locationId: string | null,
@@ -304,6 +333,7 @@ export async function checkIn(
 
   const entry = mapAttendanceRow(data);
   await createSelfieCheck(entry.id, selfiePath);
+  void requestSelfieProcessing(entry.id);
   return entry;
 }
 
