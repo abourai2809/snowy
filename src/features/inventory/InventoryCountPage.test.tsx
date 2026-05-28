@@ -26,6 +26,8 @@ describe("InventoryCountPage", () => {
 
     await user.click(screen.getByRole("button", { name: "Store" }));
     await screen.findAllByRole("button", { name: "Confirm Malsi" });
+    expect(screen.queryByRole("form", { name: "Store supply checklist form" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Single Use Cups quantity")).not.toBeInTheDocument();
     const supplySection = await findSection("store-supply-checklist");
     await user.click(within(supplySection).getByRole("button", { name: "Confirm Malsi" }));
     expect(await screen.findByText("Location verified for Malsi.")).toBeInTheDocument();

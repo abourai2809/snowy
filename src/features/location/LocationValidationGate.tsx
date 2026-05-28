@@ -10,7 +10,7 @@ interface LocationValidationGateProps {
 }
 
 export function LocationValidationGate({ children, id, location, workflowName }: LocationValidationGateProps) {
-  const [confirmed, setConfirmed] = useState(false);
+  const [inputsOpen, setInputsOpen] = useState(false);
   const [validating, setValidating] = useState(false);
   const [result, setResult] = useState<LocationValidationResult | null>(null);
 
@@ -18,20 +18,32 @@ export function LocationValidationGate({ children, id, location, workflowName }:
     setValidating(true);
     const validation = await validateLocationForStore(location);
     setResult(validation);
-    setConfirmed(true);
+    setInputsOpen(validation.status === "verified");
     setValidating(false);
   }
 
-  if (!confirmed) {
+  if (!inputsOpen) {
     return (
       <section className="card" id={id}>
         <div className="card-title">Confirm store</div>
-        <p className="muted-copy">
-          This {workflowName} is for <strong>{location.name}</strong>.
-        </p>
-        <button className="primary-button" type="button" onClick={() => void confirm()} disabled={validating}>
-          {validating ? "Checking location..." : `Confirm ${location.name}`}
-        </button>
+        {result ? (
+          <div className={result.status === "verified" ? "alert alert-success" : "alert alert-danger"}>
+            {result.message}
+          </div>
+        ) : (
+          <p className="muted-copy">
+            This {workflowName} is for <strong>{location.name}</strong>.
+          </p>
+        )}
+        {result && result.status !== "verified" ? (
+          <button className="primary-button" type="button" onClick={() => setInputsOpen(true)}>
+            Continue to {workflowName}
+          </button>
+        ) : (
+          <button className="primary-button" type="button" onClick={() => void confirm()} disabled={validating}>
+            {validating ? "Checking location..." : `Confirm ${location.name}`}
+          </button>
+        )}
       </section>
     );
   }
