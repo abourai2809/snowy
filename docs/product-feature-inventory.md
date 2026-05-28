@@ -81,7 +81,10 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 ## Store Gelato Features
 
 - Store staff must be checked in to a location before using store workflows.
-- Store inventory workflows ask staff to confirm the current checked-in store and run warning-only browser location validation before counts.
+- The Store tab is an action hub: it shows store workflow choices and optional reporting, but no editable workflow fields.
+- Store workflow forms open from dedicated action views after staff choose the action.
+- Store workflow actions ask staff to confirm the current checked-in store and run warning-only browser location validation before editable fields are shown.
+- Browser location mismatch shows a strong warning, but staff can explicitly continue when they are sure the selected store/action is correct.
 - Receive incoming lab dispatches for the active store.
 - Accepted dispatched pans become backup/deep-freezer stock at that store.
 - Move a backup pan to display by pan ID.

@@ -994,10 +994,17 @@ button {
   border: 1px solid var(--line);
   background: var(--tlll);
   color: var(--tldd);
+  cursor: pointer;
+  font-family: inherit;
   font-size: 12px;
   font-weight: 800;
   text-align: center;
   text-decoration: none;
+}
+
+.quick-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .urgent-card {

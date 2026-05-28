@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Flavour } from "../../domain/flavours";
 import type { Pan } from "../../domain/pans";
-import { isStoreRole, type LocationOption } from "../../domain/roles";
+import { isStoreRole, type LocationOption, type StaffProfile } from "../../domain/roles";
 import { useAuth } from "../auth/AuthProvider";
 import { listLocations } from "../admin/staff/staffApi";
 import { listFlavours } from "../catalog/catalogApi";
@@ -19,7 +19,20 @@ import {
   listDisplayPans,
   listIncomingDispatches,
   type IncomingDispatch,
+  type StoreActor,
 } from "./storeApi";
+
+const STORE_ACTIONS = [
+  { id: "incoming-pans", label: "Incoming pans", workflowName: "incoming pans" },
+  { id: "morning-inventory-check", label: "Morning check", workflowName: "morning inventory check" },
+  { id: "urgent-requirement", label: "Urgent need", workflowName: "urgent requirement" },
+  { id: "move-to-display", label: "Move to display", workflowName: "move to display" },
+  { id: "deep-freezer-weights", label: "Deep freezer count", workflowName: "EOD deep freezer weights" },
+  { id: "eod-gelato-weights", label: "EOD gelato weights", workflowName: "EOD gelato weights" },
+  { id: "store-supply-checklist", label: "Supply count", workflowName: "store supply checklist" },
+] as const;
+
+type StoreActionId = (typeof STORE_ACTIONS)[number]["id"];
 
 export function StoreDashboard() {
   const { activeAttendanceLoading, activeLocationId, profile } = useAuth();
@@ -28,6 +41,7 @@ export function StoreDashboard() {
   const [backupPans, setBackupPans] = useState<Pan[]>([]);
   const [displayPans, setDisplayPans] = useState<Pan[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [activeActionId, setActiveActionId] = useState<StoreActionId | null>(null);
   const [urgentRefreshKey, setUrgentRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +93,10 @@ export function StoreDashboard() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    setActiveActionId(null);
+  }, [locationId]);
+
   if (!profile) {
     return null;
   }
@@ -91,6 +109,44 @@ export function StoreDashboard() {
     return <div className="alert alert-danger">Check in to select your store before using store workflows.</div>;
   }
 
+  const activeAction = activeActionId ? getStoreAction(activeActionId) : null;
+
+  if (activeAction) {
+    return (
+      <div className="page-stack">
+        {error ? <div className="alert alert-danger">{error}</div> : null}
+        {loading ? <p className="muted-copy">Loading store...</p> : null}
+        <section className="card">
+          <div className="card-title">{activeAction.label}</div>
+          <p className="muted-copy">
+            Current store: <strong>{currentLocation?.name ?? locationId}</strong>
+          </p>
+          <button className="secondary-button" type="button" onClick={() => setActiveActionId(null)}>
+            Back to store actions
+          </button>
+        </section>
+        {withLocationValidation(
+          currentLocation,
+          activeAction.id,
+          activeAction.workflowName,
+          renderStoreAction({
+            actionId: activeAction.id,
+            actor,
+            backupPans,
+            displayPans,
+            flavours,
+            incoming,
+            load,
+            locationId,
+            profile,
+            urgentRefreshKey,
+            setUrgentRefreshKey,
+          }),
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="page-stack">
       {error ? <div className="alert alert-danger">{error}</div> : null}
@@ -101,80 +157,19 @@ export function StoreDashboard() {
           Current store: <strong>{currentLocation?.name ?? locationId}</strong>
         </p>
         <div className="quick-action-grid">
-          <a className="quick-action" href="#incoming-pans">Incoming pans</a>
-          <a className="quick-action" href="#morning-inventory-check">Morning check</a>
-          <a className="quick-action" href="#urgent-requirement">Urgent need</a>
-          <a className="quick-action" href="#move-to-display">Move to display</a>
-          <a className="quick-action" href="#deep-freezer-weights">Deep freezer count</a>
-          <a className="quick-action" href="#eod-gelato-weights">EOD gelato weights</a>
-          <a className="quick-action" href="#store-supply-checklist">Supply count</a>
+          {STORE_ACTIONS.map((action) => (
+            <button
+              className="quick-action"
+              type="button"
+              key={action.id}
+              disabled={loading || !currentLocation}
+              onClick={() => setActiveActionId(action.id)}
+            >
+              {action.label}
+            </button>
+          ))}
         </div>
       </section>
-      <UrgentRequirementsPanel key={urgentRefreshKey} profile={profile} locationId={locationId} />
-      {withLocationValidation(
-        currentLocation,
-        "morning-inventory-check",
-        "morning inventory check",
-        <MorningInventoryVerification {...actor} locationId={locationId} businessDate={todayDate()} />,
-      )}
-      <UrgentRequirementForm
-        {...actor}
-        locationId={locationId}
-        flavours={flavours}
-        onCreated={() => setUrgentRefreshKey((current) => current + 1)}
-      />
-      <div id="incoming-pans">
-        <IncomingDispatches
-          {...actor}
-          locationId={locationId}
-          dispatches={incoming}
-          flavours={flavours}
-          onChanged={() => void load()}
-        />
-      </div>
-      <section className="card">
-        <div className="card-title">Backup freezer</div>
-        {backupPans.length === 0 ? <p className="muted-copy">No backup pans.</p> : null}
-        <PanRows pans={backupPans} flavours={flavours} />
-      </section>
-      <div id="move-to-display">
-        <DisplayMovementForm
-          {...actor}
-          locationId={locationId}
-          backupPans={backupPans}
-          flavours={flavours}
-          onChanged={() => void load()}
-        />
-      </div>
-      <section className="card">
-        <div className="card-title">Display freezer</div>
-        {displayPans.length === 0 ? <p className="muted-copy">No display pans.</p> : null}
-        <PanRows pans={displayPans} flavours={flavours} />
-      </section>
-      {withLocationValidation(
-        currentLocation,
-        "deep-freezer-weights",
-        "EOD deep freezer weights",
-        <DeepFreezerCountForm {...actor} locationId={locationId} businessDate={todayDate()} flavours={flavours} />,
-      )}
-      {withLocationValidation(
-        currentLocation,
-        "eod-gelato-weights",
-        "EOD gelato weights",
-        <EodGelatoCount
-          {...actor}
-          locationId={locationId}
-          displayPans={displayPans}
-          flavours={flavours}
-          onChanged={() => void load()}
-        />,
-      )}
-      {withLocationValidation(
-        currentLocation,
-        "store-supply-checklist",
-        "store supply checklist",
-        <InventoryCountPage title="Store supply checklist" scope="store" />,
-      )}
     </div>
   );
 }
@@ -203,6 +198,107 @@ function PanRows({ pans, flavours }: { pans: Pan[]; flavours: Flavour[] }) {
       ))}
     </div>
   );
+}
+
+interface StoreActionContext {
+  actionId: StoreActionId;
+  actor: StoreActor;
+  backupPans: Pan[];
+  displayPans: Pan[];
+  flavours: Flavour[];
+  incoming: IncomingDispatch[];
+  load: () => Promise<void>;
+  locationId: string;
+  profile: StaffProfile;
+  urgentRefreshKey: number;
+  setUrgentRefreshKey: (update: (current: number) => number) => void;
+}
+
+function renderStoreAction({
+  actionId,
+  actor,
+  backupPans,
+  displayPans,
+  flavours,
+  incoming,
+  load,
+  locationId,
+  profile,
+  urgentRefreshKey,
+  setUrgentRefreshKey,
+}: StoreActionContext): ReactNode {
+  switch (actionId) {
+    case "incoming-pans":
+      return (
+        <IncomingDispatches
+          {...actor}
+          locationId={locationId}
+          dispatches={incoming}
+          flavours={flavours}
+          onChanged={() => void load()}
+        />
+      );
+    case "morning-inventory-check":
+      return <MorningInventoryVerification {...actor} locationId={locationId} businessDate={todayDate()} />;
+    case "urgent-requirement":
+      return (
+        <>
+          <UrgentRequirementsPanel key={urgentRefreshKey} profile={profile} locationId={locationId} />
+          <UrgentRequirementForm
+            {...actor}
+            locationId={locationId}
+            flavours={flavours}
+            onCreated={() => setUrgentRefreshKey((current) => current + 1)}
+          />
+        </>
+      );
+    case "move-to-display":
+      return (
+        <>
+          <section className="card">
+            <div className="card-title">Backup freezer</div>
+            {backupPans.length === 0 ? <p className="muted-copy">No backup pans.</p> : null}
+            <PanRows pans={backupPans} flavours={flavours} />
+          </section>
+          <DisplayMovementForm
+            {...actor}
+            locationId={locationId}
+            backupPans={backupPans}
+            flavours={flavours}
+            onChanged={() => void load()}
+          />
+        </>
+      );
+    case "deep-freezer-weights":
+      return <DeepFreezerCountForm {...actor} locationId={locationId} businessDate={todayDate()} flavours={flavours} />;
+    case "eod-gelato-weights":
+      return (
+        <>
+          <section className="card">
+            <div className="card-title">Display freezer</div>
+            {displayPans.length === 0 ? <p className="muted-copy">No display pans.</p> : null}
+            <PanRows pans={displayPans} flavours={flavours} />
+          </section>
+          <EodGelatoCount
+            {...actor}
+            locationId={locationId}
+            displayPans={displayPans}
+            flavours={flavours}
+            onChanged={() => void load()}
+          />
+        </>
+      );
+    case "store-supply-checklist":
+      return <InventoryCountPage title="Store supply checklist" scope="store" />;
+  }
+}
+
+function getStoreAction(actionId: StoreActionId) {
+  const action = STORE_ACTIONS.find((item) => item.id === actionId);
+  if (!action) {
+    throw new Error(`Unknown store action: ${actionId}`);
+  }
+  return action;
 }
 
 function withLocationValidation(

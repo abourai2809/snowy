@@ -114,10 +114,8 @@ async function checkInStoreStaff(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Check in" }));
   expect(await screen.findByText("Checked in")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Store" }));
-  await screen.findAllByRole("button", { name: "Confirm Malsi" });
-  const supplySection = document.querySelector("#store-supply-checklist");
-  expect(supplySection).not.toBeNull();
-  await user.click(within(supplySection as HTMLElement).getByRole("button", { name: "Confirm Malsi" }));
+  await user.click(await screen.findByRole("button", { name: "Supply count" }));
+  await user.click(await screen.findByRole("button", { name: "Confirm Malsi" }));
 }
 
 async function uploadCheckInSelfie(user: ReturnType<typeof userEvent.setup>) {

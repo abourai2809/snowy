@@ -78,6 +78,8 @@ describe("AttendancePage", () => {
     expect(screen.getAllByText("Rajpur Road").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "Store" }));
+    await user.click(await screen.findByRole("button", { name: "Incoming pans" }));
+    await user.click(await screen.findByRole("button", { name: "Confirm Rajpur Road" }));
 
     expect(await screen.findByText(/PIS-20260524-01/)).toBeInTheDocument();
   });
