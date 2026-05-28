@@ -1,7 +1,7 @@
 create table if not exists public.attendance_location_segments (
   id uuid primary key default gen_random_uuid(),
   attendance_entry_id uuid not null references public.attendance_entries(id) on delete cascade,
-  user_id text not null references public.users(id),
+  user_id uuid not null references public.users(id),
   location_id text not null references public.locations(id),
   work_date date not null,
   check_in_at timestamptz not null,
