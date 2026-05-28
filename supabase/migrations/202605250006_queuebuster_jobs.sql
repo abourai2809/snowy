@@ -152,6 +152,51 @@ add column if not exists safe_payload jsonb,
 add column if not exists actor_id uuid references public.users(id) on delete set null,
 add column if not exists created_at timestamptz default now();
 
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'queuebuster_job_events'
+      and column_name = 'job_id'
+  ) then
+    execute $backfill$
+      update public.queuebuster_job_events
+      set queuebuster_job_id = coalesce(queuebuster_job_id, job_id)
+      where queuebuster_job_id is null
+    $backfill$;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'queuebuster_job_events'
+      and column_name = 'payload'
+  ) then
+    execute $backfill$
+      update public.queuebuster_job_events
+      set safe_payload = coalesce(safe_payload, payload)
+      where safe_payload is null
+    $backfill$;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'queuebuster_job_events'
+      and column_name = 'created_by'
+  ) then
+    execute $backfill$
+      update public.queuebuster_job_events
+      set actor_id = coalesce(actor_id, created_by)
+      where actor_id is null
+    $backfill$;
+  end if;
+end $$;
+
 alter table public.queuebuster_job_events
 alter column status type public.queuebuster_job_status using status::text::public.queuebuster_job_status,
 alter column safe_payload type jsonb using safe_payload::jsonb;
