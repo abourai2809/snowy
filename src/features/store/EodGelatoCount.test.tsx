@@ -70,7 +70,7 @@ describe("store EOD gelato counts", () => {
     expect(count.items[0].panId).toBe(displayPanUuid);
   });
 
-  it("auto-returns non-empty display pans to backup after EOD submit", async () => {
+  it("returns non-empty display pans to deep while keeping the display assignment", async () => {
     const [displayPanUuid] = await seedStorePans(1);
     await movePanToDisplay({
       panUuid: displayPanUuid,
@@ -98,20 +98,27 @@ describe("store EOD gelato counts", () => {
       listPanEvents("malsi"),
     ]);
 
-    expect(displayPans).toHaveLength(0);
+    expect(displayPans).toEqual([
+      expect.objectContaining({
+        id: displayPanUuid,
+        currentWeightKg: 1.1,
+        panRole: "display",
+        status: "returned",
+      }),
+    ]);
     expect(backupPans).toEqual([
       expect.objectContaining({
         id: displayPanUuid,
         currentWeightKg: 1.1,
-        panRole: "backup",
-        status: "received",
+        panRole: "display",
+        status: "returned",
       }),
     ]);
     expect(events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           panUuid: displayPanUuid,
-          eventType: "display_pan_returned_to_backup",
+          eventType: "display_pan_returned_to_deep",
           weightKg: 1.1,
         }),
       ]),

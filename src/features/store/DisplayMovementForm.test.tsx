@@ -3,9 +3,12 @@ import { listFlavours, resetDemoCatalogData } from "../catalog/catalogApi";
 import { createDispatch, createProduction, resetDemoLabData } from "../lab/labApi";
 import {
   acceptIncomingDispatch,
+  checkoutDisplayPan,
+  listBackupPans,
   listDisplayPans,
   listIncomingDispatches,
   movePanToDisplay,
+  listPanEvents,
   resetDemoStoreData,
 } from "./storeApi";
 
@@ -62,9 +65,83 @@ describe("store display movement", () => {
       }),
     ).rejects.toThrow("Partial pan weight looks too high. Enter kilograms, not grams. Use 6 instead of 6000.");
   });
+
+  it("requires checkout before replacing the active display pan for a flavour", async () => {
+    const [currentPanUuid, replacementPanUuid] = await seedAcceptedStorePans(2);
+
+    await movePanToDisplay({
+      panUuid: currentPanUuid,
+      storeLocationId: "malsi",
+      fillState: "full",
+      weightKg: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    await expect(
+      movePanToDisplay({
+        panUuid: replacementPanUuid,
+        storeLocationId: "malsi",
+        fillState: "full",
+        weightKg: null,
+        actorId: "staff-store",
+        actorRole: "store_staff",
+        actorLocationId: "malsi",
+      }),
+    ).rejects.toThrow("Check out the current display pan for this flavour before moving another pan to display.");
+
+    await checkoutDisplayPan({
+      panUuid: currentPanUuid,
+      storeLocationId: "malsi",
+      weightKg: 1.4,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+    await movePanToDisplay({
+      panUuid: replacementPanUuid,
+      storeLocationId: "malsi",
+      fillState: "full",
+      weightKg: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    const [display, backup, events] = await Promise.all([
+      listDisplayPans("malsi"),
+      listBackupPans("malsi"),
+      listPanEvents("malsi"),
+    ]);
+    expect(display).toEqual([expect.objectContaining({ id: replacementPanUuid })]);
+    expect(backup).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: currentPanUuid,
+          currentWeightKg: 1.4,
+          panRole: "backup",
+          status: "returned",
+        }),
+      ]),
+    );
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          panUuid: currentPanUuid,
+          eventType: "display_pan_checked_out_to_deep",
+          weightKg: 1.4,
+        }),
+      ]),
+    );
+  });
 });
 
 async function seedAcceptedStorePan() {
+  return (await seedAcceptedStorePans(1))[0];
+}
+
+async function seedAcceptedStorePans(count: number) {
   const flavours = await listFlavours(true);
   const flavour = flavours.find((item) => item.shortCode === "PIS");
   expect(flavour).toBeDefined();
@@ -72,13 +149,13 @@ async function seedAcceptedStorePan() {
   const production = await createProduction({
     flavour: flavour!,
     productionDate: "2026-05-23",
-    panCount: 1,
+    panCount: count,
     fullWeightKg: 3.5,
     notes: null,
     producedBy: "staff-lab",
   });
   await createDispatch({
-    panUuids: [production.pans[0].id],
+    panUuids: production.pans.map((pan) => pan.id),
     toLocationId: "malsi",
     dispatchedBy: "staff-lab",
     notes: null,
@@ -92,5 +169,5 @@ async function seedAcceptedStorePan() {
     actorRole: "store_staff",
     actorLocationId: "malsi",
   });
-  return production.pans[0].id;
+  return production.pans.map((pan) => pan.id);
 }

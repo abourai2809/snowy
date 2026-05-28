@@ -141,16 +141,17 @@ function buildAttendanceReviewRows(
 
   for (const entry of entries) {
     const staff = staffById.get(entry.userId);
-    const location = entry.locationId ? locationById.get(entry.locationId) : undefined;
-    const key = `${entry.workDate}|${entry.userId}|${entry.locationId ?? "none"}`;
+    const reviewLocationId = staff?.defaultLocationId ?? null;
+    const location = reviewLocationId ? locationById.get(reviewLocationId) : undefined;
+    const key = `${entry.workDate}|${entry.userId}`;
     const requiredHours = staff?.requiredHoursPerDay ?? 8;
     const existing = rows.get(key) ?? {
       id: key,
       date: entry.workDate,
       userId: entry.userId,
       staffName: staff?.name ?? entry.userId,
-      locationId: entry.locationId,
-      locationName: location?.name ?? entry.locationId ?? "No location",
+      locationId: reviewLocationId,
+      locationName: location?.name ?? reviewLocationId ?? "No default",
       shiftCount: 0,
       firstCheckInAt: entry.checkInAt,
       lastCheckOutAt: null,

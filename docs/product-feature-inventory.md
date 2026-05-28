@@ -33,7 +33,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
   - approve staff signup requests,
   - deactivate/reactivate staff,
   - assign role,
-  - set default location,
+  - set default location for monthly salary review grouping,
   - set allowed holidays,
   - add bonus days,
   - reset/manage staff app password.
@@ -65,6 +65,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - The active checked-in location is shown in the app header and drives store-specific workflows.
 - Location verification can be enforced or disabled by Admin.
 - Attendance stores check-in/out timestamps, location, and verification metadata where available.
+- Monthly attendance review groups salary rows by staff default location, not by the store actually worked during a shift.
 
 ## Lab Features
 
@@ -88,13 +89,16 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - Receive incoming lab dispatches for the active store.
 - Accepted dispatched pans become backup/deep-freezer stock at that store.
 - Move a backup pan to display by pan ID.
+- Each store can have only one active display-assigned pan per flavour.
+- A display-assigned pan keeps its pan ID attached to that flavour until it is explicitly checked out of display.
+- Partial pans returned from display to deep freezer are shown separately from new/full deep-freezer pans.
 - Display movement requires Full or Partial. Partial requires weight.
 - EOD gelato weights are a distinct store action.
 - EOD gelato rows are prefilled from relevant display/deep-freezer stock to reduce missed entries.
 - EOD display rows show flavour name first and pan ID below it.
 - Staff enter weights in kg; gram-like values such as 6000 are blocked.
 - EOD submission updates pan lifecycle automatically:
-  - non-empty display pans return to backup/deep-freezer stock with the submitted weight,
+  - non-empty display pans return to deep-freezer stock as partial pans while keeping the active display assignment,
   - zero-weight display pans are closed as depleted/empty,
   - pan lifecycle events are recorded.
 - Projected deep-freezer balances include:

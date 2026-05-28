@@ -38,6 +38,20 @@ export interface PanEvent {
   metadata: Record<string, unknown>;
 }
 
+export function isActiveDisplayAssignment(pan: Pan): boolean {
+  return pan.active && pan.panRole === "display" && (pan.status === "display" || pan.status === "returned");
+}
+
+export function isDeepFreezerPan(pan: Pan): boolean {
+  if (!pan.active) return false;
+  if (pan.panRole === "backup" && (pan.status === "received" || pan.status === "returned")) return true;
+  return pan.panRole === "display" && pan.status === "returned";
+}
+
+export function isPartialDeepFreezerPan(pan: Pan): boolean {
+  return pan.status === "returned";
+}
+
 export function buildPanId(shortCode: string, productionDate: string, sequence: number): string {
   const numericDate = productionDate.replace(/-/g, "");
   return `${shortCode.toUpperCase()}-${numericDate}-${String(sequence).padStart(2, "0")}`;

@@ -13,7 +13,7 @@ import {
   resetDemoStoreData,
   submitEodGelatoCount,
 } from "../../store/storeApi";
-import { renderApp, screen, userEvent } from "../../../test/render";
+import { renderApp, screen, userEvent, within } from "../../../test/render";
 
 describe("AdminReportsPage", () => {
   beforeEach(() => {
@@ -29,8 +29,13 @@ describe("AdminReportsPage", () => {
   it("shows the attendance roster in Admin review and store oversight", async () => {
     const user = userEvent.setup();
     const storeStaff = getDemoStaffByRole("store_staff");
-    const shift = await checkIn(storeStaff, storeStaff.defaultLocationId, new Date(), null, selfieFile());
-    await checkOut(shift, new Date(new Date(shift.checkInAt).getTime() + 8 * 60 * 60 * 1000));
+    const shiftStart = new Date();
+    shiftStart.setUTCHours(9, 0, 0, 0);
+    const firstShift = await checkIn(storeStaff, "rajpur", shiftStart, null, selfieFile());
+    await checkOut(firstShift, new Date(new Date(firstShift.checkInAt).getTime() + 4 * 60 * 60 * 1000));
+    const secondShiftStart = new Date(new Date(firstShift.checkInAt).getTime() + 5 * 60 * 60 * 1000);
+    const secondShift = await checkIn(storeStaff, "mussoorie", secondShiftStart, null, selfieFile());
+    await checkOut(secondShift, new Date(new Date(secondShift.checkInAt).getTime() + 4 * 60 * 60 * 1000));
 
     renderApp(<App initialRole="admin" />);
     await user.click(screen.getByRole("button", { name: "Stores" }));
@@ -38,12 +43,16 @@ describe("AdminReportsPage", () => {
     expect(await screen.findByText("Today roster")).toBeInTheDocument();
     expect(screen.getAllByText(storeStaff.name).length).toBeGreaterThan(0);
     expect(screen.getByText("Recent attendance selfies")).toBeInTheDocument();
-    expect(screen.getByAltText(`Attendance selfie for ${storeStaff.name}`)).toBeInTheDocument();
+    expect(screen.getAllByAltText(`Attendance selfie for ${storeStaff.name}`).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "Review" }));
 
     expect(await screen.findByText("Monthly attendance review")).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Monthly attendance review" })).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Monthly attendance review" });
+    expect(within(table).getAllByRole("row")).toHaveLength(2);
+    expect(within(table).getByText("Malsi")).toBeInTheDocument();
+    expect(within(table).queryByText("Rajpur Road")).not.toBeInTheDocument();
+    expect(within(table).queryByText("Mussoorie")).not.toBeInTheDocument();
     expect(screen.getByText("Full day")).toBeInTheDocument();
     expect(screen.getByText("Attendance selfie review")).toBeInTheDocument();
   });

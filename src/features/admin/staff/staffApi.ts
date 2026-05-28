@@ -567,6 +567,7 @@ export async function updateHolidaySettings(
   allowedHolidaysPerMonth: number,
   bonusDaysBalance: number,
   requiredHoursPerDay?: number,
+  defaultLocationId?: string | null,
 ): Promise<void> {
   if (!isSupabaseConfigured) {
     const existing = demoStaff.find((staff) => staff.id === staffId);
@@ -579,14 +580,20 @@ export async function updateHolidaySettings(
     if (requiredHoursPerDay !== undefined) {
       existing.requiredHoursPerDay = requiredHoursPerDay;
     }
+    if (defaultLocationId !== undefined) {
+      existing.defaultLocationId = defaultLocationId;
+    }
     return;
   }
 
-  const userPatch: Record<string, number> = {
+  const userPatch: Record<string, number | string | null> = {
     allowed_holidays_per_month: allowedHolidaysPerMonth,
   };
   if (requiredHoursPerDay !== undefined) {
     userPatch.required_hours_per_day = requiredHoursPerDay;
+  }
+  if (defaultLocationId !== undefined) {
+    userPatch.default_location_id = defaultLocationId;
   }
 
   const supabase = requireSupabaseClient();

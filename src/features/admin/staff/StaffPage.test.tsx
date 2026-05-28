@@ -37,6 +37,7 @@ describe("StaffPage", () => {
     const row = newStaffRow.closest("article");
     expect(row).not.toBeNull();
     expect(within(row as HTMLElement).getByText("7h required")).toBeInTheDocument();
+    await user.selectOptions(within(row as HTMLElement).getByLabelText("Default location"), "mussoorie");
     await user.clear(within(row as HTMLElement).getByLabelText("Required hours/day"));
     await user.type(within(row as HTMLElement).getByLabelText("Required hours/day"), "8");
     await user.clear(within(row as HTMLElement).getByLabelText("Bonus days"));
@@ -45,6 +46,7 @@ describe("StaffPage", () => {
 
     await waitFor(() => expect(within(row as HTMLElement).getByLabelText("Bonus days")).toHaveValue(3));
     await waitFor(() => expect(within(row as HTMLElement).getByLabelText("Required hours/day")).toHaveValue(8));
+    await waitFor(() => expect(within(row as HTMLElement).getByLabelText("Default location")).toHaveValue("mussoorie"));
   });
 
   it("does not expose Staff controls to Store Staff", () => {

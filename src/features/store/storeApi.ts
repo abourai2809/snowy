@@ -1,5 +1,6 @@
 import type { Dispatch } from "../../domain/dispatches";
 import type { EodCount, EodCountItem, DisplayMovement, FillState, StoreReceipt } from "../../domain/inventory";
+import { isActiveDisplayAssignment, isDeepFreezerPan } from "../../domain/pans";
 import type { Pan, PanEvent, PanRole } from "../../domain/pans";
 import { isStoreRole, type AppRole } from "../../domain/roles";
 import { validateGelatoPanWeightKg } from "../../domain/weights";
@@ -35,6 +36,12 @@ export interface DisplayMovementInput extends StoreActor {
   storeLocationId: string;
   fillState: FillState;
   weightKg: number | null;
+}
+
+export interface CheckoutDisplayPanInput extends StoreActor {
+  panUuid: string;
+  storeLocationId: string;
+  weightKg: number;
 }
 
 export interface EodCountInput extends StoreActor {
@@ -450,12 +457,12 @@ export async function listStorePans(locationId: string): Promise<Pan[]> {
 
 export async function listBackupPans(locationId: string): Promise<Pan[]> {
   const pans = await listStorePans(locationId);
-  return pans.filter((pan) => pan.status === "received" && pan.panRole === "backup");
+  return pans.filter(isDeepFreezerPan);
 }
 
 export async function listDisplayPans(locationId: string): Promise<Pan[]> {
   const pans = await listStorePans(locationId);
-  return pans.filter((pan) => pan.status === "display" && pan.panRole === "display");
+  return pans.filter(isActiveDisplayAssignment);
 }
 
 export async function listDisplayMovements(locationId?: string): Promise<DisplayMovement[]> {
@@ -507,10 +514,21 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
   const backupPans = await listBackupPans(input.storeLocationId);
   const pan = backupPans.find((item) => item.id === input.panUuid);
   if (!pan) {
-    throw new Error("Only backup pans in this store can be moved to display.");
+    throw new Error("Only deep freezer pans in this store can be moved to display.");
   }
 
-  const displayWeightKg = input.fillState === "full" ? pan.fullWeightKg ?? pan.currentWeightKg : input.weightKg;
+  const displayPans = await listDisplayPans(input.storeLocationId);
+  const conflictingDisplayPan = displayPans.find((item) => item.flavourId === pan.flavourId && item.id !== pan.id);
+  if (conflictingDisplayPan) {
+    throw new Error("Check out the current display pan for this flavour before moving another pan to display.");
+  }
+
+  const isReturnedPartialPan =
+    pan.status === "returned" &&
+    pan.currentWeightKg !== null &&
+    (pan.fullWeightKg === null || pan.currentWeightKg < pan.fullWeightKg);
+  const fillState = isReturnedPartialPan ? "partial" : input.fillState;
+  const displayWeightKg = fillState === "full" ? pan.fullWeightKg ?? pan.currentWeightKg : input.weightKg ?? pan.currentWeightKg;
   if (!displayWeightKg || displayWeightKg <= 0) {
     throw new Error("Display weight is required.");
   }
@@ -519,7 +537,7 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
     throw new Error(displayWeightError);
   }
 
-  const movement = await createDisplayMovement({ ...input, weightKg: displayWeightKg });
+  const movement = await createDisplayMovement({ ...input, fillState, weightKg: displayWeightKg });
   await recordPanEvent({
     panUuid: pan.id,
     eventType: "moved_to_display",
@@ -529,7 +547,7 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
     toRole: "display",
     weightKg: displayWeightKg,
     recordedBy: input.actorId,
-    metadata: { fillState: input.fillState, movementId: movement.id },
+    metadata: { fillState, movementId: movement.id },
   });
   await updatePanState(pan.id, {
     currentWeightKg: displayWeightKg,
@@ -537,6 +555,83 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
     status: "display",
   });
   return movement;
+}
+
+export async function checkoutDisplayPan(input: CheckoutDisplayPanInput): Promise<Pan> {
+  assertStoreLocation(input, input.storeLocationId);
+
+  if (!Number.isFinite(input.weightKg) || input.weightKg < 0) {
+    throw new Error("Checkout weight must be zero or more kg.");
+  }
+
+  const weightError = validateGelatoPanWeightKg(input.weightKg, {
+    fieldName: "Checkout weight",
+    allowZero: true,
+  });
+  if (weightError) {
+    throw new Error(weightError);
+  }
+
+  const displayPans = await listDisplayPans(input.storeLocationId);
+  const pan = displayPans.find((item) => item.id === input.panUuid);
+  if (!pan) {
+    throw new Error("Only active display pans can be checked out.");
+  }
+
+  if (input.weightKg <= 0) {
+    await recordPanEvent({
+      panUuid: pan.id,
+      eventType: "display_pan_depleted",
+      fromLocationId: pan.currentLocationId,
+      toLocationId: pan.currentLocationId,
+      fromRole: pan.panRole,
+      toRole: "store",
+      weightKg: 0,
+      recordedBy: input.actorId,
+      metadata: { source: "display_checkout" },
+    });
+    return updatePanState(pan.id, {
+      currentWeightKg: 0,
+      panRole: "store",
+      status: "closed",
+      active: false,
+    });
+  }
+
+  const alreadyInDeepFreezer = pan.status === "returned";
+  if (alreadyInDeepFreezer) {
+    const weightDelta = input.weightKg - (pan.currentWeightKg ?? 0);
+    if (weightDelta !== 0) {
+      await recordPanEvent({
+        panUuid: pan.id,
+        eventType: "display_pan_deep_weight_adjusted",
+        fromLocationId: pan.currentLocationId,
+        toLocationId: pan.currentLocationId,
+        fromRole: pan.panRole,
+        toRole: pan.panRole,
+        weightKg: weightDelta,
+        recordedBy: input.actorId,
+        metadata: { source: "display_checkout" },
+      });
+    }
+  }
+  await recordPanEvent({
+    panUuid: pan.id,
+    eventType: alreadyInDeepFreezer ? "display_pan_checked_out" : "display_pan_checked_out_to_deep",
+    fromLocationId: pan.currentLocationId,
+    toLocationId: pan.currentLocationId,
+    fromRole: pan.panRole,
+    toRole: "backup",
+    weightKg: input.weightKg,
+    recordedBy: input.actorId,
+    metadata: { source: "display_checkout" },
+  });
+  return updatePanState(pan.id, {
+    currentWeightKg: input.weightKg,
+    panRole: "backup",
+    status: "returned",
+    active: true,
+  });
 }
 
 export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCountWithItems> {
@@ -638,21 +733,38 @@ async function finalizeEodDisplayPans(
           return;
         }
 
-        await recordPanEvent({
-          panUuid: pan.id,
-          eventType: "display_pan_returned_to_backup",
-          fromLocationId: pan.currentLocationId,
-          toLocationId: pan.currentLocationId,
-          fromRole: pan.panRole,
-          toRole: "backup",
-          weightKg: item.weightKg,
-          recordedBy: input.actorId,
-          metadata: { countId, businessDate: input.businessDate },
-        });
+        if (pan.status === "returned") {
+          const weightDelta = item.weightKg - (pan.currentWeightKg ?? 0);
+          if (weightDelta !== 0) {
+            await recordPanEvent({
+              panUuid: pan.id,
+              eventType: "display_pan_returned_to_deep_adjusted",
+              fromLocationId: pan.currentLocationId,
+              toLocationId: pan.currentLocationId,
+              fromRole: pan.panRole,
+              toRole: pan.panRole,
+              weightKg: weightDelta,
+              recordedBy: input.actorId,
+              metadata: { countId, businessDate: input.businessDate },
+            });
+          }
+        } else {
+          await recordPanEvent({
+            panUuid: pan.id,
+            eventType: "display_pan_returned_to_deep",
+            fromLocationId: pan.currentLocationId,
+            toLocationId: pan.currentLocationId,
+            fromRole: pan.panRole,
+            toRole: "display",
+            weightKg: item.weightKg,
+            recordedBy: input.actorId,
+            metadata: { countId, businessDate: input.businessDate },
+          });
+        }
         await updatePanState(pan.id, {
           currentWeightKg: item.weightKg,
-          panRole: "backup",
-          status: "received",
+          panRole: "display",
+          status: "returned",
           active: true,
         });
       }),

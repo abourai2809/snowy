@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Flavour } from "../../domain/flavours";
+import { isActiveDisplayAssignment, isPartialDeepFreezerPan } from "../../domain/pans";
 import type { Pan } from "../../domain/pans";
 import { isStoreRole, type LocationOption, type StaffProfile } from "../../domain/roles";
 import { useAuth } from "../auth/AuthProvider";
@@ -192,12 +193,20 @@ function PanRows({ pans, flavours }: { pans: Pan[]; flavours: Flavour[] }) {
           <div>
             <strong>{flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"}</strong>
             <span>{pan.panId}</span>
+            <span>{formatPanState(pan)}</span>
           </div>
           <span className="badge">{pan.currentWeightKg ?? "-"} kg</span>
         </article>
       ))}
     </div>
   );
+}
+
+function formatPanState(pan: Pan): string {
+  if (isActiveDisplayAssignment(pan) && pan.status === "returned") return "Partial deep, display assigned";
+  if (isActiveDisplayAssignment(pan)) return "Display assigned";
+  if (isPartialDeepFreezerPan(pan)) return "Partial deep";
+  return "New/full deep";
 }
 
 interface StoreActionContext {
@@ -256,14 +265,15 @@ function renderStoreAction({
       return (
         <>
           <section className="card">
-            <div className="card-title">Backup freezer</div>
-            {backupPans.length === 0 ? <p className="muted-copy">No backup pans.</p> : null}
+            <div className="card-title">Deep freezer pans</div>
+            {backupPans.length === 0 ? <p className="muted-copy">No deep freezer pans.</p> : null}
             <PanRows pans={backupPans} flavours={flavours} />
           </section>
           <DisplayMovementForm
             {...actor}
             locationId={locationId}
             backupPans={backupPans}
+            displayPans={displayPans}
             flavours={flavours}
             onChanged={() => void load()}
           />
@@ -275,7 +285,7 @@ function renderStoreAction({
       return (
         <>
           <section className="card">
-            <div className="card-title">Display freezer</div>
+            <div className="card-title">Current display assignments</div>
             {displayPans.length === 0 ? <p className="muted-copy">No display pans.</p> : null}
             <PanRows pans={displayPans} flavours={flavours} />
           </section>

@@ -465,8 +465,15 @@ async function listDisplayMovedWeightsByFlavour(locationId: string, baselineMs: 
 
 async function listDisplayReturnedWeightsByFlavour(locationId: string, baselineMs: number): Promise<Map<string, number>> {
   const returnedWeights = new Map<string, number>();
+  const returnEventTypes = new Set([
+    "display_pan_returned_to_backup",
+    "display_pan_returned_to_deep",
+    "display_pan_returned_to_deep_adjusted",
+    "display_pan_checked_out_to_deep",
+    "display_pan_deep_weight_adjusted",
+  ]);
   const events = (await listPanEvents(locationId)).filter(
-    (event) => event.eventType === "display_pan_returned_to_backup" && happenedAfterBaseline(event.recordedAt, baselineMs),
+    (event) => returnEventTypes.has(event.eventType) && happenedAfterBaseline(event.recordedAt, baselineMs),
   );
   const pans = await listPansByIds([...new Set(events.map((event) => event.panUuid))]);
   const panById = new Map(pans.map((pan) => [pan.id, pan]));

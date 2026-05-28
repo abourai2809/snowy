@@ -98,6 +98,7 @@ export function StaffPage() {
         member.allowedHolidaysPerMonth,
         member.bonusDaysBalance,
         member.requiredHoursPerDay,
+        member.defaultLocationId,
       );
       await refresh();
     } catch (holidayError) {
@@ -338,6 +339,22 @@ export function StaffPage() {
               </div>
 
               <div className="compact-grid">
+                <label className="field">
+                  <span>Default location</span>
+                  <select
+                    value={member.defaultLocationId ?? ""}
+                    onChange={(event) =>
+                      updateStaffRow(member.id, { defaultLocationId: event.target.value || null })
+                    }
+                  >
+                    <option value="">No default</option>
+                    {locations.map((location) => (
+                      <option value={location.id} key={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="field">
                   <span>Required hours/day</span>
                   <input
