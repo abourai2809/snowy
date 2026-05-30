@@ -4,6 +4,7 @@ import {
   checkIn,
   checkOut,
   getCurrentAttendanceLocationId,
+  listAttendanceForDateRange,
   listTodayLocationSegmentsForUser,
   resetDemoAttendanceData,
   switchAttendanceLocation,
@@ -37,6 +38,20 @@ describe("attendanceApi", () => {
     expect((await listTodayLocationSegmentsForUser(profile.id, "2026-05-27")).at(-1)?.checkOutAt).toBe(
       "2026-05-27T21:00:00.000Z",
     );
+  });
+
+  it("lists attendance entries across an inclusive date range", async () => {
+    const profile = getDemoStaffByRole("store_staff");
+    const first = await checkIn(profile, "rajpur", new Date("2026-05-26T09:00:00.000Z"), null, selfieFile());
+    await checkOut(first, new Date("2026-05-26T17:00:00.000Z"));
+    const second = await checkIn(profile, "rajpur", new Date("2026-05-27T09:00:00.000Z"), null, selfieFile());
+    await checkOut(second, new Date("2026-05-27T17:00:00.000Z"));
+
+    await checkIn(profile, "rajpur", new Date("2026-05-28T09:00:00.000Z"), null, selfieFile());
+
+    const entries = await listAttendanceForDateRange("2026-05-26", "2026-05-27");
+
+    expect(entries.map((entry) => entry.workDate)).toEqual(["2026-05-26", "2026-05-27"]);
   });
 });
 

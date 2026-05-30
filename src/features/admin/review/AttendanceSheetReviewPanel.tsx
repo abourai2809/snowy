@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
 import {
   calculateHours,
+  getTodayKey,
   type AttendanceEntry,
   type AttendanceSelfieCheck,
 } from "../../../domain/attendance";
 import type { LocationOption, StaffProfile } from "../../../domain/roles";
 import {
-  listAttendanceForMonth,
+  listAttendanceForDateRange,
   listSelfieChecksForAttendanceIds,
 } from "../../attendance/attendanceApi";
 import { listLocations, listStaff } from "../staff/staffApi";
 
-function currentMonth(): string {
-  return new Date().toISOString().slice(0, 7);
+function currentDate(): string {
+  return getTodayKey();
 }
 
 interface AttendanceReviewRow {
@@ -36,62 +37,82 @@ interface AttendanceReviewRow {
 }
 
 export function AttendanceSheetReviewPanel() {
-  const [attendanceMonth, setAttendanceMonth] = useState(currentMonth);
+  const [startDate, setStartDate] = useState(currentDate);
+  const [endDate, setEndDate] = useState(currentDate);
   const [staffFilter, setStaffFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
-  const [monthlyAttendance, setMonthlyAttendance] = useState<AttendanceEntry[]>([]);
-  const [monthlySelfieChecks, setMonthlySelfieChecks] = useState<AttendanceSelfieCheck[]>([]);
+  const [attendanceEntries, setAttendanceEntries] = useState<AttendanceEntry[]>([]);
+  const [selfieChecks, setSelfieChecks] = useState<AttendanceSelfieCheck[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [now, setNow] = useState(() => new Date());
   const [error, setError] = useState<string | null>(null);
+  const dateRange = normalizeDateRange(startDate, endDate);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     async function loadAttendanceReview() {
-      const [monthlyAttendanceRows, staffRows, locationRows] = await Promise.all([
-        listAttendanceForMonth(attendanceMonth),
+      const [attendanceRows, staffRows, locationRows] = await Promise.all([
+        listAttendanceForDateRange(dateRange.startDate, dateRange.endDate),
         listStaff(),
         listLocations(),
       ]);
-      const monthlySelfieRows = await listSelfieChecksForAttendanceIds(monthlyAttendanceRows.map((entry) => entry.id));
+      const selfieRows = await listSelfieChecksForAttendanceIds(attendanceRows.map((entry) => entry.id));
 
-      setMonthlyAttendance(monthlyAttendanceRows);
-      setMonthlySelfieChecks(monthlySelfieRows);
+      setAttendanceEntries(attendanceRows);
+      setSelfieChecks(selfieRows);
       setStaff(staffRows);
       setLocations(locationRows);
       setError(null);
     }
 
     void loadAttendanceReview().catch((loadError) => {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load monthly attendance.");
+      setError(loadError instanceof Error ? loadError.message : "Unable to load attendance review.");
     });
-  }, [attendanceMonth]);
+  }, [dateRange.endDate, dateRange.startDate]);
 
   const staffById = new Map(staff.map((item) => [item.id, item]));
   const locationById = new Map(locations.map((location) => [location.id, location]));
-  const monthlySelfieCheckByEntryId = new Map(monthlySelfieChecks.map((check) => [check.attendanceEntryId, check]));
+  const selfieCheckByEntryId = new Map(selfieChecks.map((check) => [check.attendanceEntryId, check]));
   const attendanceReviewRows = buildAttendanceReviewRows(
-    monthlyAttendance,
-    monthlySelfieCheckByEntryId,
+    attendanceEntries,
+    selfieCheckByEntryId,
     staffById,
     locationById,
+    now,
   ).filter((row) => {
     if (staffFilter && row.userId !== staffFilter) return false;
     if (locationFilter && row.locationId !== locationFilter) return false;
     return true;
   });
+  const csvHref = buildCsvHref(attendanceReviewRows);
+  const exportFileName = `attendance-${dateRange.startDate}-to-${dateRange.endDate}.csv`;
 
   return (
     <section className="card attendance-review-card">
-      <div className="card-title">Monthly attendance review</div>
+      <div className="card-title">Attendance review</div>
       {error ? <div className="alert alert-danger">{error}</div> : null}
       <div className="review-controls">
         <label className="field compact-field">
-          <span>Month</span>
+          <span>Start date</span>
           <input
-            aria-label="Attendance month"
-            type="month"
-            value={attendanceMonth}
-            onChange={(event) => setAttendanceMonth(event.target.value || currentMonth())}
+            aria-label="Attendance start date"
+            type="date"
+            value={startDate}
+            onChange={(event) => setStartDate(event.target.value || currentDate())}
+          />
+        </label>
+        <label className="field compact-field">
+          <span>End date</span>
+          <input
+            aria-label="Attendance end date"
+            type="date"
+            value={endDate}
+            onChange={(event) => setEndDate(event.target.value || currentDate())}
           />
         </label>
         <label className="field compact-field">
@@ -124,6 +145,18 @@ export function AttendanceSheetReviewPanel() {
             ))}
           </select>
         </label>
+        <div className="review-actions" aria-label="Attendance export actions">
+          <a className="secondary-button export-link" href={csvHref} download={exportFileName}>
+            Export CSV
+          </a>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => printAttendanceSheet(attendanceReviewRows, dateRange.startDate, dateRange.endDate)}
+          >
+            Export PDF
+          </button>
+        </div>
       </div>
       <AttendanceReviewSummary rows={attendanceReviewRows} />
       <AttendanceReviewTable rows={attendanceReviewRows} />
@@ -136,8 +169,10 @@ function buildAttendanceReviewRows(
   selfieCheckByEntryId: Map<string, AttendanceSelfieCheck>,
   staffById: Map<string, StaffProfile>,
   locationById: Map<string, LocationOption>,
+  now: Date,
 ): AttendanceReviewRow[] {
   const rows = new Map<string, AttendanceReviewRow>();
+  const today = getTodayKey(now);
 
   for (const entry of entries) {
     const staff = staffById.get(entry.userId);
@@ -177,6 +212,9 @@ function buildAttendanceReviewRows(
       }
     } else {
       existing.openShiftCount += 1;
+      if (entry.workDate === today) {
+        existing.totalHours += calculateHours(entry.checkInAt, now.toISOString());
+      }
     }
 
     applySelfieStatus(existing, entry, selfieCheckByEntryId.get(entry.id));
@@ -222,6 +260,119 @@ function classifyAttendanceCredit(totalHours: number, requiredHours: number, ope
   return "No hours";
 }
 
+function normalizeDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } {
+  return startDate <= endDate ? { startDate, endDate } : { startDate: endDate, endDate: startDate };
+}
+
+function buildCsvHref(rows: AttendanceReviewRow[]): string {
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(buildAttendanceCsv(rows))}`;
+}
+
+function buildAttendanceCsv(rows: AttendanceReviewRow[]): string {
+  const header = [
+    "Date",
+    "Employee",
+    "Review location",
+    "Shifts",
+    "First check-in",
+    "Last checkout",
+    "Hours",
+    "Credit",
+    "Selfie",
+  ];
+  const body = rows.map((row) => [
+    row.date,
+    row.staffName,
+    row.locationName,
+    String(row.shiftCount),
+    formatTime(row.firstCheckInAt),
+    row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "Open",
+    formatHours(row.totalHours),
+    row.credit,
+    formatReviewSelfieStatus(row),
+  ]);
+
+  return [header, ...body].map((line) => line.map(formatCsvValue).join(",")).join("\n");
+}
+
+function printAttendanceSheet(rows: AttendanceReviewRow[], startDate: string, endDate: string) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+
+  printWindow.document.write(buildAttendancePrintHtml(rows, startDate, endDate));
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+}
+
+function buildAttendancePrintHtml(rows: AttendanceReviewRow[], startDate: string, endDate: string): string {
+  const title = `Attendance ${startDate} to ${endDate}`;
+  const tableRows = rows.map((row) => `
+      <tr>
+        <td>${escapeHtml(row.date)}</td>
+        <td>${escapeHtml(row.staffName)}</td>
+        <td>${escapeHtml(row.locationName)}</td>
+        <td>${row.shiftCount}</td>
+        <td>${escapeHtml(formatTime(row.firstCheckInAt))}</td>
+        <td>${escapeHtml(row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "Open")}</td>
+        <td>${escapeHtml(formatHours(row.totalHours))}</td>
+        <td>${escapeHtml(row.credit)}</td>
+        <td>${escapeHtml(formatReviewSelfieStatus(row))}</td>
+      </tr>
+    `).join("");
+
+  return `<!doctype html>
+<html>
+  <head>
+    <title>${escapeHtml(title)}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; color: #1f2933; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      p { margin: 0 0 16px; color: #52606d; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { border: 1px solid #d9e2ec; padding: 8px; text-align: left; }
+      th { background: #f0f4f8; text-transform: uppercase; font-size: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>Attendance sheet</h1>
+    <p>${escapeHtml(startDate)} to ${escapeHtml(endDate)}</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Employee</th>
+          <th>Review location</th>
+          <th>Shifts</th>
+          <th>First check-in</th>
+          <th>Last checkout</th>
+          <th>Hours</th>
+          <th>Credit</th>
+          <th>Selfie</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  </body>
+</html>`;
+}
+
+function formatCsvValue(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function AttendanceReviewSummary({ rows }: { rows: AttendanceReviewRow[] }) {
   const totalHours = rows.reduce((total, row) => total + row.totalHours, 0);
   const fullDays = rows.filter((row) => row.credit === "Full day").length;
@@ -256,12 +407,12 @@ function AttendanceReviewSummary({ rows }: { rows: AttendanceReviewRow[] }) {
 
 function AttendanceReviewTable({ rows }: { rows: AttendanceReviewRow[] }) {
   if (rows.length === 0) {
-    return <p className="muted-copy">No attendance entries match this month and filter.</p>;
+    return <p className="muted-copy">No attendance entries match this date range and filter.</p>;
   }
 
   return (
     <div className="review-table-wrap">
-      <table className="review-table" aria-label="Monthly attendance review">
+      <table className="review-table" aria-label="Attendance review">
         <thead>
           <tr>
             <th>Date</th>
@@ -287,7 +438,10 @@ function AttendanceReviewTable({ rows }: { rows: AttendanceReviewRow[] }) {
               <td>{row.shiftCount}</td>
               <td>{formatTime(row.firstCheckInAt)}</td>
               <td>{row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "Open"}</td>
-              <td>{formatHours(row.totalHours)}</td>
+              <td>
+                {formatHours(row.totalHours)}
+                {row.openShiftCount > 0 ? <small>Running</small> : null}
+              </td>
               <td>
                 <span className="status-pill">{row.credit}</span>
               </td>

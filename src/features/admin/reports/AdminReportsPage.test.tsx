@@ -13,7 +13,7 @@ import {
   resetDemoStoreData,
   submitEodGelatoCount,
 } from "../../store/storeApi";
-import { renderApp, screen, userEvent, within } from "../../../test/render";
+import { fireEvent, renderApp, screen, userEvent, within } from "../../../test/render";
 
 describe("AdminReportsPage", () => {
   beforeEach(() => {
@@ -47,14 +47,48 @@ describe("AdminReportsPage", () => {
 
     await user.click(screen.getByRole("button", { name: "Review" }));
 
-    expect(await screen.findByText("Monthly attendance review")).toBeInTheDocument();
-    const table = screen.getByRole("table", { name: "Monthly attendance review" });
+    const todayKey = new Date().toISOString().slice(0, 10);
+    expect(await screen.findByText("Attendance review")).toBeInTheDocument();
+    expect(screen.getByLabelText("Attendance start date")).toHaveValue(todayKey);
+    expect(screen.getByLabelText("Attendance end date")).toHaveValue(todayKey);
+    const csvLink = screen.getByRole("link", { name: "Export CSV" });
+    expect(csvLink).toHaveAttribute("download", `attendance-${todayKey}-to-${todayKey}.csv`);
+    expect(csvLink.getAttribute("href")).toContain("data:text/csv");
+    expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
+
+    const table = screen.getByRole("table", { name: "Attendance review" });
     expect(within(table).getAllByRole("row")).toHaveLength(2);
     expect(within(table).getByText("Malsi")).toBeInTheDocument();
     expect(within(table).queryByText("Rajpur Road")).not.toBeInTheDocument();
     expect(within(table).queryByText("Mussoorie")).not.toBeInTheDocument();
     expect(screen.getByText("Full day")).toBeInTheDocument();
     expect(screen.getByText("Attendance selfie review")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Attendance start date"), { target: { value: "2026-05-20" } });
+    fireEvent.change(screen.getByLabelText("Attendance end date"), { target: { value: "2026-05-20" } });
+
+    expect(await screen.findByText("No attendance entries match this date range and filter.")).toBeInTheDocument();
+  });
+
+  it("shows running hours for staff who are still checked in today", async () => {
+    const user = userEvent.setup();
+    const storeStaff = getDemoStaffByRole("store_staff");
+    const todayStart = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const shiftStart = new Date(Math.max(todayStart.getTime(), Date.now() - 2 * 60 * 60 * 1000));
+    const expectedHours = Math.max(0, Math.round(((Date.now() - shiftStart.getTime()) / 3_600_000) * 10) / 10);
+    const expectedHoursText = Number.isInteger(expectedHours) ? `${expectedHours}` : expectedHours.toFixed(1);
+    await checkIn(storeStaff, "rajpur", shiftStart, null, selfieFile());
+
+    renderApp(<App initialRole="admin" />);
+    await user.click(screen.getAllByRole("button", { name: "Review" }).at(-1) as HTMLElement);
+
+    const table = await screen.findByRole("table", { name: "Attendance review" });
+    const staffRow = within(table).getByText(storeStaff.name).closest("tr");
+    expect(staffRow).toBeTruthy();
+    expect(within(staffRow as HTMLElement).getByText("Open")).toBeInTheDocument();
+    expect(within(staffRow as HTMLElement).getByText("Open shift")).toBeInTheDocument();
+    expect(within(staffRow as HTMLElement).getByText("Running")).toBeInTheDocument();
+    expect(within(staffRow as HTMLElement).getByText(expectedHoursText)).toBeInTheDocument();
   });
 
   it("lets Admin correct historical EOD gelato weights", async () => {

@@ -44,7 +44,8 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
   - morning freezer checks,
   - supply counts,
   - empty pan counts by store,
-  - today attendance roster.
+  - today attendance roster,
+  - date-range attendance review with CSV export and browser PDF export.
 - Correct historical EOD gelato counts and inventory counts frictionlessly for MVP.
 - Manage store deep-freezer starting counts and flavour target weights for store requirements.
 
@@ -65,7 +66,8 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - The active checked-in location is shown in the app header and drives store-specific workflows.
 - Location verification can be enforced or disabled by Admin.
 - Attendance stores check-in/out timestamps, location, and verification metadata where available.
-- Monthly attendance review groups salary rows by staff default location, not by the store actually worked during a shift.
+- Attendance review defaults to today, supports date ranges, and shows running hours for staff still checked in today.
+- Attendance review groups salary rows by staff default location, not by the store actually worked during a shift.
 
 ## Lab Features
 
@@ -129,6 +131,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - QueueBuster/POS CSV reconciliation.
 - QueueBuster browser automation worker execution.
 - Events workflow.
+- Salary calculation from attendance days, holidays, allowed holidays, and bonus days.
 - Immutable audit trail with required correction reasons.
 - Detailed pan-to-pan consolidation/refill tracking.
 - Native mobile app.

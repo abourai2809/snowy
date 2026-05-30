@@ -215,6 +215,30 @@ export async function listAttendanceForDate(date = getTodayKey()): Promise<Atten
   return data.map(mapAttendanceRow);
 }
 
+export async function listAttendanceForDateRange(startDate: string, endDate: string): Promise<AttendanceEntry[]> {
+  const range = normalizeDateRange(startDate, endDate);
+
+  if (!isSupabaseConfigured) {
+    return sortAttendance(
+      demoAttendance.filter((entry) => entry.workDate >= range.startDate && entry.workDate <= range.endDate),
+    );
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("attendance_entries")
+    .select("*")
+    .gte("work_date", range.startDate)
+    .lte("work_date", range.endDate)
+    .order("work_date")
+    .order("check_in_at");
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapAttendanceRow);
+}
+
 export async function listAttendanceForMonth(month: string): Promise<AttendanceEntry[]> {
   const start = `${month}-01`;
   const end = nextMonthStart(month);
@@ -236,6 +260,13 @@ export async function listAttendanceForMonth(month: string): Promise<AttendanceE
   }
 
   return data.map(mapAttendanceRow);
+}
+
+function normalizeDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } {
+  if (!startDate || !endDate) {
+    throw new Error("Attendance date range requires both start and end dates.");
+  }
+  return startDate <= endDate ? { startDate, endDate } : { startDate: endDate, endDate: startDate };
 }
 
 export async function listSelfieChecksForAttendanceIds(attendanceEntryIds: string[]): Promise<AttendanceSelfieCheck[]> {

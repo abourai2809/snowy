@@ -706,9 +706,27 @@ button {
 
 .review-controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 8px;
+  align-items: end;
   margin-bottom: 10px;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-actions .secondary-button {
+  min-height: 42px;
+}
+
+.export-link {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  text-decoration: none;
 }
 
 .attendance-review-summary {
