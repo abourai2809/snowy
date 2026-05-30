@@ -1,11 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import type { FillState } from "../../domain/inventory";
-import { isPartialDeepFreezerPan } from "../../domain/pans";
+import { isActiveDisplayAssignment, isPartialDeepFreezerPan } from "../../domain/pans";
 import type { Pan } from "../../domain/pans";
 import type { Flavour } from "../../domain/flavours";
 import type { StoreActor } from "./storeApi";
-import { checkoutDisplayPan, movePanToDisplay } from "./storeApi";
+import { swapPanToDisplay } from "./storeApi";
 
 interface DisplayMovementFormProps extends StoreActor {
   locationId: string;
@@ -25,13 +24,42 @@ export function DisplayMovementForm({
   locationId,
   onChanged,
 }: DisplayMovementFormProps) {
+  const [flavourId, setFlavourId] = useState("");
   const [panUuid, setPanUuid] = useState("");
-  const [fillState, setFillState] = useState<FillState>("full");
-  const [weightKg, setWeightKg] = useState("");
-  const [checkoutWeights, setCheckoutWeights] = useState<Record<string, string>>({});
+  const [checkoutMode, setCheckoutMode] = useState<"partial" | "empty">("partial");
+  const [checkoutWeightKg, setCheckoutWeightKg] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const flavourById = useMemo(() => new Map(flavours.map((flavour) => [flavour.id, flavour])), [flavours]);
+  const candidatePans = useMemo(
+    () => backupPans.filter((pan) => pan.flavourId === flavourId && !isActiveDisplayAssignment(pan)),
+    [backupPans, flavourId],
+  );
+  const currentDisplayPan = displayPans.find((pan) => pan.flavourId === flavourId) ?? null;
+  const canSubmit = Boolean(
+    flavourId &&
+      panUuid &&
+      (!currentDisplayPan ||
+        checkoutMode === "empty" ||
+        checkoutWeightKg ||
+        currentDisplayPan.currentWeightKg !== null),
+  );
+
+  function updateFlavour(flavourIdValue: string) {
+    setFlavourId(flavourIdValue);
+    setPanUuid("");
+    setCheckoutMode("partial");
+    setCheckoutWeightKg("");
+  }
+
+  useEffect(() => {
+    setCheckoutMode("partial");
+    setCheckoutWeightKg(
+      currentDisplayPan?.currentWeightKg === null || currentDisplayPan?.currentWeightKg === undefined
+        ? ""
+        : String(currentDisplayPan.currentWeightKg),
+    );
+  }, [currentDisplayPan?.currentWeightKg, currentDisplayPan?.id]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,51 +67,28 @@ export function DisplayMovementForm({
     setMessage(null);
 
     try {
-      await movePanToDisplay({
+      await swapPanToDisplay({
         panUuid,
         storeLocationId: locationId,
-        fillState,
-        weightKg: fillState === "partial" ? Number(weightKg) : null,
+        checkoutPanUuid: currentDisplayPan?.id ?? null,
+        checkoutWeightKg: currentDisplayPan
+          ? checkoutMode === "empty"
+            ? 0
+            : Number(checkoutWeightKg || (currentDisplayPan.currentWeightKg ?? 0))
+          : null,
         actorId,
         actorRole,
         actorLocationId,
       });
-      setMessage("Pan moved to display.");
+      setMessage(currentDisplayPan ? "Display pan swapped." : "Pan moved to display.");
+      setFlavourId("");
       setPanUuid("");
-      setWeightKg("");
-      setFillState("full");
+      setCheckoutMode("partial");
+      setCheckoutWeightKg("");
       onChanged();
     } catch (moveError) {
       setError(moveError instanceof Error ? moveError.message : "Unable to move pan.");
     }
-  }
-
-  async function checkout(pan: Pan) {
-    setError(null);
-    setMessage(null);
-
-    try {
-      await checkoutDisplayPan({
-        panUuid: pan.id,
-        storeLocationId: locationId,
-        weightKg: Number(checkoutWeights[pan.id] ?? pan.currentWeightKg ?? 0),
-        actorId,
-        actorRole,
-        actorLocationId,
-      });
-      setCheckoutWeights((current) => {
-        const { [pan.id]: _removed, ...rest } = current;
-        return rest;
-      });
-      setMessage("Display pan checked out.");
-      onChanged();
-    } catch (checkoutError) {
-      setError(checkoutError instanceof Error ? checkoutError.message : "Unable to check out display pan.");
-    }
-  }
-
-  function updateCheckoutWeight(panId: string, value: string) {
-    setCheckoutWeights((current) => ({ ...current, [panId]: value }));
   }
 
   return (
@@ -91,39 +96,23 @@ export function DisplayMovementForm({
       <div className="card-title">Move to display</div>
       {error ? <div className="alert alert-danger">{error}</div> : null}
       {message ? <div className="alert alert-success">{message}</div> : null}
-      {displayPans.length > 0 ? (
-        <div className="list-stack">
-          {displayPans.map((pan) => (
-            <article className="list-row" key={pan.id}>
-              <div>
-                <strong>{flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"}</strong>
-                <span>{pan.panId}</span>
-                <span>{pan.status === "returned" ? "Returned to deep, still assigned" : "In display"}</span>
-              </div>
-              <label className="field compact-field">
-                <span>Checkout kg</span>
-                <input
-                  aria-label={`Checkout weight ${pan.panId}`}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={checkoutWeights[pan.id] ?? String(pan.currentWeightKg ?? "")}
-                  onChange={(event) => updateCheckoutWeight(pan.id, event.target.value)}
-                />
-              </label>
-              <button className="secondary-button" type="button" onClick={() => checkout(pan)}>
-                Check out
-              </button>
-            </article>
-          ))}
-        </div>
-      ) : null}
       <form aria-label="Display movement form" onSubmit={submit}>
         <label className="field">
+          <span>Flavour</span>
+          <select value={flavourId} onChange={(event) => updateFlavour(event.target.value)} required>
+            <option value="">Select flavour</option>
+            {flavours.map((flavour) => (
+              <option value={flavour.id} key={flavour.id}>
+                {flavour.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
           <span>Pan ID</span>
-          <select value={panUuid} onChange={(event) => setPanUuid(event.target.value)} required>
+          <select value={panUuid} onChange={(event) => setPanUuid(event.target.value)} required disabled={!flavourId}>
             <option value="">Select deep freezer pan</option>
-            {backupPans.map((pan) => (
+            {candidatePans.map((pan) => (
               <option value={pan.id} key={pan.id}>
                 {flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"} - {pan.panId}
                 {isPartialDeepFreezerPan(pan) ? " (partial deep)" : ""}
@@ -131,28 +120,43 @@ export function DisplayMovementForm({
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>Pan state</span>
-          <select value={fillState} onChange={(event) => setFillState(event.target.value as FillState)}>
-            <option value="full">Full</option>
-            <option value="partial">Partial</option>
-          </select>
-        </label>
-        {fillState === "partial" ? (
-          <label className="field">
-            <span>Current weight kg</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={weightKg}
-              onChange={(event) => setWeightKg(event.target.value)}
-              required
-            />
-          </label>
+
+        {flavourId && candidatePans.length === 0 ? (
+          <p className="muted-copy">No deep freezer pan IDs available for this flavour.</p>
         ) : null}
-        <button className="primary-button" type="submit" disabled={!panUuid}>
-          Move pan
+
+        {currentDisplayPan ? (
+          <div className="list-row">
+            <div>
+              <strong>Current display pan</strong>
+              <span>{currentDisplayPan.panId}</span>
+              <span>{currentDisplayPan.status === "returned" ? "Returned to deep, still assigned" : "In display"}</span>
+            </div>
+            <label className="field compact-field">
+              <span>Checkout</span>
+              <select value={checkoutMode} onChange={(event) => setCheckoutMode(event.target.value as "partial" | "empty")}>
+                <option value="partial">Partial</option>
+                <option value="empty">Completely empty</option>
+              </select>
+            </label>
+            {checkoutMode === "partial" ? (
+              <label className="field compact-field">
+                <span>Remaining kg</span>
+                <input
+                  aria-label={`Checkout weight ${currentDisplayPan.panId}`}
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={checkoutWeightKg}
+                  onChange={(event) => setCheckoutWeightKg(event.target.value)}
+                  required
+                />
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+        <button className="primary-button" type="submit" disabled={!canSubmit}>
+          {currentDisplayPan ? "Swap pan" : "Move pan"}
         </button>
       </form>
     </section>
