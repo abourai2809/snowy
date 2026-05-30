@@ -340,6 +340,53 @@ export async function listRecentAttendanceSelfieReviews(days = 3): Promise<Atten
   );
 }
 
+export async function listAttendanceSelfieReviewsForDate(
+  date = getTodayKey(),
+  locationId = "",
+): Promise<AttendanceSelfieReview[]> {
+  if (!isSupabaseConfigured) {
+    return sortAttendance(demoAttendance)
+      .filter((entry) => entry.workDate === date && entry.selfieInUrl && (!locationId || entry.locationId === locationId))
+      .sort((a, b) => new Date(b.checkInAt).getTime() - new Date(a.checkInAt).getTime())
+      .map((entry) => ({
+        entry,
+        check: demoSelfieChecks.find((check) => check.attendanceEntryId === entry.id) ?? null,
+        selfieUrl: entry.selfieInUrl,
+      }));
+  }
+
+  let query = requireSupabaseClient()
+    .from("attendance_entries")
+    .select("*")
+    .eq("work_date", date)
+    .not("selfie_in_url", "is", null);
+
+  if (locationId) {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data, error } = await query.order("check_in_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const entries = data.map(mapAttendanceRow);
+  const checks = await listSelfieChecksForAttendanceIds(entries.map((entry) => entry.id));
+  const checkByEntryId = new Map(checks.map((check) => [check.attendanceEntryId, check]));
+
+  return Promise.all(
+    entries.map(async (entry) => {
+      const check = checkByEntryId.get(entry.id) ?? null;
+      const selfiePath = check?.selfiePath ?? entry.selfieInUrl;
+      const selfieUrl = selfiePath && !check?.storageDeletedAt
+        ? await createSelfieSignedUrl(selfiePath)
+        : null;
+      return { entry, check, selfieUrl };
+    }),
+  );
+}
+
 async function createSelfieSignedUrl(path: string): Promise<string | null> {
   const { data, error } = await requireSupabaseClient()
     .storage

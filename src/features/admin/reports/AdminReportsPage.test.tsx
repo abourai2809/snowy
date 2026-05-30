@@ -13,7 +13,7 @@ import {
   resetDemoStoreData,
   submitEodGelatoCount,
 } from "../../store/storeApi";
-import { fireEvent, renderApp, screen, userEvent, within } from "../../../test/render";
+import { fireEvent, renderApp, screen, userEvent, waitFor, within } from "../../../test/render";
 
 describe("AdminReportsPage", () => {
   beforeEach(() => {
@@ -44,6 +44,14 @@ describe("AdminReportsPage", () => {
     expect(screen.getAllByText(storeStaff.name).length).toBeGreaterThan(0);
     expect(screen.getByText("Recent attendance selfies")).toBeInTheDocument();
     expect(screen.getAllByAltText(`Attendance selfie for ${storeStaff.name}`).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Selfie date")).toHaveValue(new Date().toISOString().slice(0, 10));
+    await user.selectOptions(screen.getByLabelText("Selfie store"), "rajpur");
+    await waitFor(() => {
+      expect(screen.getAllByAltText(`Attendance selfie for ${storeStaff.name}`)).toHaveLength(1);
+    });
+    const filteredSelfieCard = screen.getAllByAltText(`Attendance selfie for ${storeStaff.name}`)[0].closest("article");
+    expect(filteredSelfieCard).toBeTruthy();
+    expect(within(filteredSelfieCard as HTMLElement).getByText(/Rajpur Road/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Review" }));
 

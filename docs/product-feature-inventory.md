@@ -61,7 +61,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - Check-in selfies are stored in private Supabase Storage and queued for AI review.
 - Gemini validates apron, headwear/hair covering, and gloved thumbs-up evidence.
 - AI review results are flags for Admin/manager review, not hard attendance blockers.
-- Admin can view recent attendance selfies in the app for the three-day review window.
+- Admin can review attendance selfies by day and store for the three-day live selfie window.
 - Older attendance selfie images are archived to Google Drive by a backend worker, with archive metadata kept in Supabase.
 - The active checked-in location is shown in the app header and drives store-specific workflows.
 - Location verification can be enforced or disabled by Admin.

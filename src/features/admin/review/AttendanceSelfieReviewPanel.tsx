@@ -1,39 +1,76 @@
 import { useEffect, useState } from "react";
-import type { AttendanceEntry, AttendanceSelfieCheck, AttendanceSelfieReview } from "../../../domain/attendance";
-import type { StaffProfile } from "../../../domain/roles";
-import { listRecentAttendanceSelfieReviews } from "../../attendance/attendanceApi";
-import { listStaff } from "../staff/staffApi";
+import { getTodayKey, type AttendanceEntry, type AttendanceSelfieCheck, type AttendanceSelfieReview } from "../../../domain/attendance";
+import type { LocationOption, StaffProfile } from "../../../domain/roles";
+import { listAttendanceSelfieReviewsForDate } from "../../attendance/attendanceApi";
+import { listLocations, listStaff } from "../staff/staffApi";
+
+function currentDate(): string {
+  return getTodayKey();
+}
 
 export function AttendanceSelfieReviewPanel({ title = "Attendance selfie review" }: { title?: string }) {
+  const [selfieDate, setSelfieDate] = useState(currentDate);
+  const [locationFilter, setLocationFilter] = useState("");
   const [reviews, setReviews] = useState<AttendanceSelfieReview[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
+  const [locations, setLocations] = useState<LocationOption[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadReviews() {
-      const [reviewRows, staffRows] = await Promise.all([
-        listRecentAttendanceSelfieReviews(3),
+      const [reviewRows, staffRows, locationRows] = await Promise.all([
+        listAttendanceSelfieReviewsForDate(selfieDate, locationFilter),
         listStaff(),
+        listLocations(),
       ]);
 
       setReviews(reviewRows);
       setStaff(staffRows);
+      setLocations(locationRows);
       setError(null);
     }
 
     void loadReviews().catch((loadError) => {
       setError(loadError instanceof Error ? loadError.message : "Unable to load attendance selfies.");
     });
-  }, []);
+  }, [locationFilter, selfieDate]);
 
   const staffById = new Map(staff.map((item) => [item.id, item]));
+  const locationById = new Map(locations.map((location) => [location.id, location]));
+  const storeLocations = locations.filter((location) => location.type === "store");
 
   return (
     <section className="card">
       <div className="card-title">{title}</div>
       {error ? <div className="alert alert-danger">{error}</div> : null}
-      {reviews.length === 0 ? <p className="muted-copy">No recent selfies.</p> : null}
-      <SelfieReviewGrid reviews={reviews} staffById={staffById} />
+      <div className="review-controls selfie-review-controls">
+        <label className="field compact-field">
+          <span>Date</span>
+          <input
+            aria-label="Selfie date"
+            type="date"
+            value={selfieDate}
+            onChange={(event) => setSelfieDate(event.target.value || currentDate())}
+          />
+        </label>
+        <label className="field compact-field">
+          <span>Store</span>
+          <select
+            aria-label="Selfie store"
+            value={locationFilter}
+            onChange={(event) => setLocationFilter(event.target.value)}
+          >
+            <option value="">All stores</option>
+            {storeLocations.map((location) => (
+              <option value={location.id} key={location.id}>
+                {location.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {reviews.length === 0 ? <p className="muted-copy">No selfies match this date and store.</p> : null}
+      <SelfieReviewGrid reviews={reviews} staffById={staffById} locationById={locationById} />
     </section>
   );
 }
@@ -41,9 +78,11 @@ export function AttendanceSelfieReviewPanel({ title = "Attendance selfie review"
 function SelfieReviewGrid({
   reviews,
   staffById,
+  locationById,
 }: {
   reviews: AttendanceSelfieReview[];
   staffById: Map<string, StaffProfile>;
+  locationById: Map<string, LocationOption>;
 }) {
   if (reviews.length === 0) {
     return null;
@@ -66,7 +105,7 @@ function SelfieReviewGrid({
           <div className="selfie-review-meta">
             <strong>{staffById.get(review.entry.userId)?.name ?? review.entry.userId}</strong>
             <span>
-              {review.entry.locationId ?? "No location"} / {formatDateTime(review.entry.checkInAt)}
+              {locationName(review.entry.locationId, locationById)} / {formatDateTime(review.entry.checkInAt)}
             </span>
             <span>{formatSelfieDetail(review.entry, review.check ?? undefined)}</span>
           </div>
@@ -75,6 +114,11 @@ function SelfieReviewGrid({
       ))}
     </div>
   );
+}
+
+function locationName(locationId: string | null, locationById: Map<string, LocationOption>): string {
+  if (!locationId) return "No location";
+  return locationById.get(locationId)?.name ?? locationId;
 }
 
 export function formatSelfieBadge(entry: AttendanceEntry, selfieCheck: AttendanceSelfieCheck | undefined): string {

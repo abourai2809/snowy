@@ -4,6 +4,7 @@ import {
   checkIn,
   checkOut,
   getCurrentAttendanceLocationId,
+  listAttendanceSelfieReviewsForDate,
   listAttendanceForDateRange,
   listTodayLocationSegmentsForUser,
   resetDemoAttendanceData,
@@ -52,6 +53,19 @@ describe("attendanceApi", () => {
     const entries = await listAttendanceForDateRange("2026-05-26", "2026-05-27");
 
     expect(entries.map((entry) => entry.workDate)).toEqual(["2026-05-26", "2026-05-27"]);
+  });
+
+  it("filters selfie reviews by date and location", async () => {
+    const profile = getDemoStaffByRole("store_staff");
+    const first = await checkIn(profile, "rajpur", new Date("2026-05-27T09:00:00.000Z"), null, selfieFile());
+    await checkOut(first, new Date("2026-05-27T12:00:00.000Z"));
+    const second = await checkIn(profile, "mussoorie", new Date("2026-05-27T13:00:00.000Z"), null, selfieFile());
+    await checkOut(second, new Date("2026-05-27T17:00:00.000Z"));
+
+    const rajpurReviews = await listAttendanceSelfieReviewsForDate("2026-05-27", "rajpur");
+
+    expect(rajpurReviews).toHaveLength(1);
+    expect(rajpurReviews[0].entry.locationId).toBe("rajpur");
   });
 });
 
