@@ -6,6 +6,7 @@ import {
   type AttendanceSelfieCheck,
 } from "../../../domain/attendance";
 import type { LocationOption, StaffProfile } from "../../../domain/roles";
+import { calculateSalaryRow, daysInMonthForDate, type SalaryCalculationRow } from "../../../domain/salary";
 import {
   listAttendanceForDateRange,
   listSelfieChecksForAttendanceIds,
@@ -34,6 +35,7 @@ interface AttendanceReviewRow {
   selfieNeedsReviewCount: number;
   selfieMissingCount: number;
   credit: string;
+  manualHours: boolean;
 }
 
 export function AttendanceSheetReviewPanel() {
@@ -46,6 +48,8 @@ export function AttendanceSheetReviewPanel() {
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [now, setNow] = useState(() => new Date());
+  const [manualHoursEnabled, setManualHoursEnabled] = useState(false);
+  const [manualHoursByRowId, setManualHoursByRowId] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const dateRange = normalizeDateRange(startDate, endDate);
 
@@ -78,19 +82,54 @@ export function AttendanceSheetReviewPanel() {
   const staffById = new Map(staff.map((item) => [item.id, item]));
   const locationById = new Map(locations.map((location) => [location.id, location]));
   const selfieCheckByEntryId = new Map(selfieChecks.map((check) => [check.attendanceEntryId, check]));
-  const attendanceReviewRows = buildAttendanceReviewRows(
+  const attendanceReviewRows = applyManualHourOverrides(buildAttendanceReviewRows(
     attendanceEntries,
     selfieCheckByEntryId,
     staffById,
     locationById,
     now,
-  ).filter((row) => {
+  ), manualHoursByRowId).filter((row) => {
     if (staffFilter && row.userId !== staffFilter) return false;
     if (locationFilter && row.locationId !== locationFilter) return false;
     return true;
   });
   const csvHref = buildCsvHref(attendanceReviewRows);
   const exportFileName = `attendance-${dateRange.startDate}-to-${dateRange.endDate}.csv`;
+
+  function enableManualHours() {
+    if (manualHoursEnabled) {
+      setManualHoursEnabled(false);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Manual hour changes affect the review table and salary PDF for this session only. Continue?",
+    );
+    if (confirmed) {
+      setManualHoursEnabled(true);
+    }
+  }
+
+  function updateManualHours(row: AttendanceReviewRow, value: string) {
+    setManualHoursByRowId((current) => {
+      const next = { ...current };
+      if (value === "") {
+        delete next[row.id];
+      } else {
+        next[row.id] = value;
+      }
+      return next;
+    });
+  }
+
+  function generateSalaryPdf() {
+    const salaryRows = buildSalaryCalculationRows(attendanceReviewRows, staff, locationById, {
+      staffFilter,
+      locationFilter,
+      daysInMonth: daysInMonthForDate(dateRange.startDate),
+    });
+    printSalarySheet(salaryRows, dateRange.startDate, dateRange.endDate);
+  }
 
   return (
     <section className="card attendance-review-card">
@@ -156,10 +195,21 @@ export function AttendanceSheetReviewPanel() {
           >
             Export PDF
           </button>
+          <button className="secondary-button" type="button" onClick={generateSalaryPdf}>
+            Calculate salary
+          </button>
+          <button className="secondary-button" type="button" onClick={enableManualHours}>
+            {manualHoursEnabled ? "Done editing hours" : "Edit hours"}
+          </button>
         </div>
       </div>
       <AttendanceReviewSummary rows={attendanceReviewRows} />
-      <AttendanceReviewTable rows={attendanceReviewRows} />
+      <AttendanceReviewTable
+        rows={attendanceReviewRows}
+        manualHoursEnabled={manualHoursEnabled}
+        manualHoursByRowId={manualHoursByRowId}
+        onManualHoursChange={updateManualHours}
+      />
     </section>
   );
 }
@@ -198,6 +248,7 @@ function buildAttendanceReviewRows(
       selfieNeedsReviewCount: 0,
       selfieMissingCount: 0,
       credit: "No hours",
+      manualHours: false,
     };
 
     existing.shiftCount += 1;
@@ -260,6 +311,78 @@ function classifyAttendanceCredit(totalHours: number, requiredHours: number, ope
   return "No hours";
 }
 
+function applyManualHourOverrides(
+  rows: AttendanceReviewRow[],
+  manualHoursByRowId: Record<string, string>,
+): AttendanceReviewRow[] {
+  return rows.map((row) => {
+    const manualHours = manualHoursByRowId[row.id];
+    if (manualHours === undefined || manualHours === "") {
+      return row;
+    }
+
+    const totalHours = Number(manualHours);
+    if (!Number.isFinite(totalHours) || totalHours < 0) {
+      return row;
+    }
+
+    return {
+      ...row,
+      totalHours,
+      manualHours: true,
+      credit: classifyAttendanceCredit(totalHours, row.requiredHours, row.openShiftCount),
+    };
+  });
+}
+
+function buildSalaryCalculationRows(
+  reviewRows: AttendanceReviewRow[],
+  staff: StaffProfile[],
+  locationById: Map<string, LocationOption>,
+  options: {
+    staffFilter: string;
+    locationFilter: string;
+    daysInMonth: number;
+  },
+): SalaryCalculationRow[] {
+  const workedDaysByUserId = new Map<string, number>();
+  for (const row of reviewRows) {
+    workedDaysByUserId.set(
+      row.userId,
+      (workedDaysByUserId.get(row.userId) ?? 0) + attendanceDayCredit(row.totalHours, row.requiredHours),
+    );
+  }
+
+  return staff
+    .filter((member) => member.active)
+    .filter((member) => !options.staffFilter || member.id === options.staffFilter)
+    .filter((member) => !options.locationFilter || member.defaultLocationId === options.locationFilter)
+    .map((member) => {
+      const locationName = member.defaultLocationId
+        ? locationById.get(member.defaultLocationId)?.name ?? member.defaultLocationId
+        : "No default";
+
+      return calculateSalaryRow({
+        staffName: member.name,
+        locationName,
+        salaryAmount: member.salaryAmount,
+        salaryType: member.salaryType,
+        workedDays: workedDaysByUserId.get(member.id) ?? 0,
+        daysInMonth: options.daysInMonth,
+      });
+    })
+    .sort((a, b) => {
+      if (a.locationName !== b.locationName) return a.locationName.localeCompare(b.locationName);
+      return a.staffName.localeCompare(b.staffName);
+    });
+}
+
+function attendanceDayCredit(totalHours: number, requiredHours: number): number {
+  if (totalHours >= requiredHours) return 1;
+  if (totalHours >= requiredHours / 2) return 0.5;
+  return 0;
+}
+
 function normalizeDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } {
   return startDate <= endDate ? { startDate, endDate } : { startDate: endDate, endDate: startDate };
 }
@@ -303,6 +426,19 @@ function printAttendanceSheet(rows: AttendanceReviewRow[], startDate: string, en
   }
 
   printWindow.document.write(buildAttendancePrintHtml(rows, startDate, endDate));
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+}
+
+function printSalarySheet(rows: SalaryCalculationRow[], startDate: string, endDate: string) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+
+  printWindow.document.write(buildSalaryPrintHtml(rows, startDate, endDate));
   printWindow.document.close();
   printWindow.focus();
   printWindow.print();
@@ -360,6 +496,60 @@ function buildAttendancePrintHtml(rows: AttendanceReviewRow[], startDate: string
 </html>`;
 }
 
+function buildSalaryPrintHtml(rows: SalaryCalculationRow[], startDate: string, endDate: string): string {
+  const daysInMonth = daysInMonthForDate(startDate);
+  const salaryRows = rows.map((row) => `
+      <tr>
+        <td>${escapeHtml(row.staffName)}</td>
+        <td>${escapeHtml(row.locationName)}</td>
+        <td>${escapeHtml(row.salaryLabel)}</td>
+        <td>${row.monthlySalary === null ? "-" : escapeHtml(formatMoney(row.monthlySalary))}</td>
+        <td>${escapeHtml(formatHours(row.workedDays))}</td>
+        <td>${escapeHtml(formatHours(row.requiredDays))}</td>
+        <td>${escapeHtml(formatHours(row.extraDays))}</td>
+        <td>${escapeHtml(formatMoney(row.dailyRate))}</td>
+        <td>${escapeHtml(formatMoney(row.payableSalary))}</td>
+        <td>${escapeHtml(row.calculation)}</td>
+      </tr>
+    `).join("");
+
+  return `<!doctype html>
+<html>
+  <head>
+    <title>Salary ${escapeHtml(startDate)} to ${escapeHtml(endDate)}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; color: #1f2933; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      p { margin: 0 0 14px; color: #52606d; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th, td { border: 1px solid #d9e2ec; padding: 7px; text-align: left; vertical-align: top; }
+      th { background: #f0f4f8; text-transform: uppercase; font-size: 9px; }
+    </style>
+  </head>
+  <body>
+    <h1>Salary calculation</h1>
+    <p>Attendance period: ${escapeHtml(startDate)} to ${escapeHtml(endDate)}. Calendar days in salary month: ${daysInMonth}. Required days: ${daysInMonth} - 4 = ${daysInMonth - 4}.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Review location</th>
+          <th>Salary type</th>
+          <th>Monthly salary</th>
+          <th>Worked days</th>
+          <th>Required days</th>
+          <th>Extra days</th>
+          <th>Daily rate</th>
+          <th>Payable</th>
+          <th>Calculation</th>
+        </tr>
+      </thead>
+      <tbody>${salaryRows}</tbody>
+    </table>
+  </body>
+</html>`;
+}
+
 function formatCsvValue(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
@@ -405,7 +595,17 @@ function AttendanceReviewSummary({ rows }: { rows: AttendanceReviewRow[] }) {
   );
 }
 
-function AttendanceReviewTable({ rows }: { rows: AttendanceReviewRow[] }) {
+function AttendanceReviewTable({
+  rows,
+  manualHoursEnabled,
+  manualHoursByRowId,
+  onManualHoursChange,
+}: {
+  rows: AttendanceReviewRow[];
+  manualHoursEnabled: boolean;
+  manualHoursByRowId: Record<string, string>;
+  onManualHoursChange: (row: AttendanceReviewRow, value: string) => void;
+}) {
   if (rows.length === 0) {
     return <p className="muted-copy">No attendance entries match this date range and filter.</p>;
   }
@@ -439,8 +639,24 @@ function AttendanceReviewTable({ rows }: { rows: AttendanceReviewRow[] }) {
               <td>{formatTime(row.firstCheckInAt)}</td>
               <td>{row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "Open"}</td>
               <td>
-                {formatHours(row.totalHours)}
+                {manualHoursEnabled ? (
+                  <label className="manual-hours-field">
+                    <span>Hours</span>
+                    <input
+                      aria-label={`Manual hours ${row.staffName} ${row.date}`}
+                      type="number"
+                      min="0"
+                      max="24"
+                      step="0.1"
+                      value={manualHoursByRowId[row.id] ?? formatHours(row.totalHours)}
+                      onChange={(event) => onManualHoursChange(row, event.target.value)}
+                    />
+                  </label>
+                ) : (
+                  formatHours(row.totalHours)
+                )}
                 {row.openShiftCount > 0 ? <small>Running</small> : null}
+                {row.manualHours ? <small>Manual</small> : null}
               </td>
               <td>
                 <span className="status-pill">{row.credit}</span>
@@ -470,6 +686,13 @@ function formatTime(value: string): string {
 
 function formatHours(value: number): string {
   return Number.isInteger(value) ? `${value}` : value.toFixed(1);
+}
+
+function formatMoney(value: number): string {
+  return value.toLocaleString([], {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
 }
 
 function formatReviewSelfieStatus(row: AttendanceReviewRow): string {

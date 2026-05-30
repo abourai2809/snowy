@@ -68,6 +68,8 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - Attendance stores check-in/out timestamps, location, and verification metadata where available.
 - Attendance review defaults to today, supports date ranges, and shows running hours for staff still checked in today.
 - Attendance review groups salary rows by staff default location, not by the store actually worked during a shift.
+- Admin can manually adjust reviewed hours for a staff/day after a confirmation warning; these adjustments affect the current review and salary PDF.
+- Admin can generate a salary calculation PDF from the attendance review. Monthly salary staff are paid full salary after calendar days minus four required worked days, plus extra days at monthly salary divided by calendar days.
 
 ## Lab Features
 
@@ -132,7 +134,6 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - QueueBuster/POS CSV reconciliation.
 - QueueBuster browser automation worker execution.
 - Events workflow.
-- Salary calculation from attendance days, holidays, allowed holidays, and bonus days.
 - Immutable audit trail with required correction reasons.
 - Detailed pan-to-pan consolidation/refill tracking.
 - Native mobile app.

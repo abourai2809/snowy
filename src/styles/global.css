@@ -807,6 +807,28 @@ button {
   font-weight: 800;
 }
 
+.manual-hours-field {
+  display: grid;
+  gap: 3px;
+  min-width: 90px;
+}
+
+.manual-hours-field span {
+  color: var(--soft);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.manual-hours-field input {
+  min-height: 34px;
+  width: 92px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 800;
+}
+
 .staff-row {
   display: grid;
   gap: 9px;

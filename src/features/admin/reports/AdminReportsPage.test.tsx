@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../../app/App";
 import { getDemoStaffByRole, resetDemoStaffData } from "../staff/staffApi";
 import { checkIn, checkOut, resetDemoAttendanceData } from "../../attendance/attendanceApi";
@@ -17,6 +17,7 @@ import { fireEvent, renderApp, screen, userEvent, waitFor, within } from "../../
 
 describe("AdminReportsPage", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     resetDemoStaffData();
     resetDemoAttendanceData();
     resetDemoCatalogData();
@@ -63,6 +64,7 @@ describe("AdminReportsPage", () => {
     expect(csvLink).toHaveAttribute("download", `attendance-${todayKey}-to-${todayKey}.csv`);
     expect(csvLink.getAttribute("href")).toContain("data:text/csv");
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Calculate salary" })).toBeInTheDocument();
 
     const table = screen.getByRole("table", { name: "Attendance review" });
     expect(within(table).getAllByRole("row")).toHaveLength(2);
@@ -71,6 +73,22 @@ describe("AdminReportsPage", () => {
     expect(within(table).queryByText("Mussoorie")).not.toBeInTheDocument();
     expect(screen.getByText("Full day")).toBeInTheDocument();
     expect(screen.getByText("Attendance selfie review")).toBeInTheDocument();
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const write = vi.fn();
+    vi.spyOn(window, "open").mockReturnValue({
+      document: { write, close: vi.fn() },
+      focus: vi.fn(),
+      print: vi.fn(),
+    } as unknown as Window);
+    await user.click(screen.getByRole("button", { name: "Edit hours" }));
+    const manualHoursInput = screen.getByLabelText(`Manual hours ${storeStaff.name} ${todayKey}`);
+    fireEvent.change(manualHoursInput, { target: { value: "9" } });
+    expect(screen.getByText("Manual")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Calculate salary" }));
+    expect(write).toHaveBeenCalledWith(expect.stringContaining("Salary calculation"));
+    expect(write).toHaveBeenCalledWith(expect.stringContaining(storeStaff.name));
+    expect(write).toHaveBeenCalledWith(expect.stringContaining("1 worked days x 800.00 daily salary"));
 
     fireEvent.change(screen.getByLabelText("Attendance start date"), { target: { value: "2026-05-20" } });
     fireEvent.change(screen.getByLabelText("Attendance end date"), { target: { value: "2026-05-20" } });
