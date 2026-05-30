@@ -34,6 +34,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
   - deactivate/reactivate staff,
   - assign role,
   - set default location for monthly salary review grouping,
+  - set salary type and salary amount used by salary calculation,
   - set allowed holidays,
   - add bonus days,
   - reset/manage staff app password.

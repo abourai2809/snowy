@@ -23,6 +23,8 @@ describe("StaffPage", () => {
     await user.type(within(form).getByLabelText("Phone"), "9000001111");
     await user.selectOptions(within(form).getByLabelText("Role"), "store_staff");
     await user.selectOptions(within(form).getByLabelText("Location"), "rajpur");
+    await user.selectOptions(within(form).getByLabelText("Salary type"), "monthly");
+    await user.type(within(form).getByLabelText("Salary amount"), "24000");
     await user.clear(within(form).getByLabelText("Required hours/day"));
     await user.type(within(form).getByLabelText("Required hours/day"), "7");
     await user.clear(within(form).getByLabelText("Allowed holidays"));
@@ -37,16 +39,21 @@ describe("StaffPage", () => {
     const row = newStaffRow.closest("article");
     expect(row).not.toBeNull();
     expect(within(row as HTMLElement).getByText("7h required")).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText("Monthly salary 24,000")).toBeInTheDocument();
     await user.selectOptions(within(row as HTMLElement).getByLabelText("Default location"), "mussoorie");
+    await user.selectOptions(within(row as HTMLElement).getByLabelText("Salary type"), "monthly");
+    await user.clear(within(row as HTMLElement).getByLabelText("Salary amount"));
+    await user.type(within(row as HTMLElement).getByLabelText("Salary amount"), "26000");
     await user.clear(within(row as HTMLElement).getByLabelText("Required hours/day"));
     await user.type(within(row as HTMLElement).getByLabelText("Required hours/day"), "8");
     await user.clear(within(row as HTMLElement).getByLabelText("Bonus days"));
     await user.type(within(row as HTMLElement).getByLabelText("Bonus days"), "3");
-    await user.click(within(row as HTMLElement).getByRole("button", { name: "Save attendance rules" }));
+    await user.click(within(row as HTMLElement).getByRole("button", { name: "Save staff settings" }));
 
     await waitFor(() => expect(within(row as HTMLElement).getByLabelText("Bonus days")).toHaveValue(3));
     await waitFor(() => expect(within(row as HTMLElement).getByLabelText("Required hours/day")).toHaveValue(8));
     await waitFor(() => expect(within(row as HTMLElement).getByLabelText("Default location")).toHaveValue("mussoorie"));
+    await waitFor(() => expect(within(row as HTMLElement).getByLabelText("Salary amount")).toHaveValue(26000));
   });
 
   it("does not expose Staff controls to Store Staff", () => {

@@ -568,6 +568,8 @@ export async function updateHolidaySettings(
   bonusDaysBalance: number,
   requiredHoursPerDay?: number,
   defaultLocationId?: string | null,
+  salaryAmount?: number | null,
+  salaryType?: SalaryType | null,
 ): Promise<void> {
   if (!isSupabaseConfigured) {
     const existing = demoStaff.find((staff) => staff.id === staffId);
@@ -583,6 +585,12 @@ export async function updateHolidaySettings(
     if (defaultLocationId !== undefined) {
       existing.defaultLocationId = defaultLocationId;
     }
+    if (salaryAmount !== undefined) {
+      existing.salaryAmount = salaryAmount;
+    }
+    if (salaryType !== undefined) {
+      existing.salaryType = salaryType;
+    }
     return;
   }
 
@@ -594,6 +602,12 @@ export async function updateHolidaySettings(
   }
   if (defaultLocationId !== undefined) {
     userPatch.default_location_id = defaultLocationId;
+  }
+  if (salaryAmount !== undefined) {
+    userPatch.salary_amount = salaryAmount;
+  }
+  if (salaryType !== undefined) {
+    userPatch.salary_type = salaryType;
   }
 
   const supabase = requireSupabaseClient();

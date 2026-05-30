@@ -99,6 +99,8 @@ export function StaffPage() {
         member.bonusDaysBalance,
         member.requiredHoursPerDay,
         member.defaultLocationId,
+        member.salaryAmount,
+        member.salaryType,
       );
       await refresh();
     } catch (holidayError) {
@@ -335,6 +337,7 @@ export function StaffPage() {
               <div className="staff-meta">
                 <span>{member.phone}</span>
                 <span>{locationName(member.defaultLocationId)}</span>
+                <span>{formatSalary(member)}</span>
                 <span>{member.requiredHoursPerDay}h required</span>
               </div>
 
@@ -354,6 +357,33 @@ export function StaffPage() {
                       </option>
                     ))}
                   </select>
+                </label>
+                <label className="field">
+                  <span>Salary type</span>
+                  <select
+                    value={member.salaryType ?? ""}
+                    onChange={(event) =>
+                      updateStaffRow(member.id, { salaryType: (event.target.value || null) as SalaryType | null })
+                    }
+                  >
+                    <option value="">Not set</option>
+                    <option value="daily">Daily</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Salary amount</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={member.salaryAmount ?? ""}
+                    onChange={(event) =>
+                      updateStaffRow(member.id, {
+                        salaryAmount: event.target.value ? Number(event.target.value) : null,
+                      })
+                    }
+                  />
                 </label>
                 <label className="field">
                   <span>Required hours/day</span>
@@ -390,7 +420,7 @@ export function StaffPage() {
                 </label>
               </div>
               <button className="secondary-button" type="button" onClick={() => handleHolidaySave(member)}>
-                Save attendance rules
+                Save staff settings
               </button>
             </article>
           ))}
@@ -398,4 +428,16 @@ export function StaffPage() {
       </section>
     </div>
   );
+}
+
+function formatSalary(member: StaffProfile): string {
+  if (!member.salaryAmount || !member.salaryType) {
+    return "Salary not set";
+  }
+
+  const amount = member.salaryAmount.toLocaleString([], {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(member.salaryAmount) ? 0 : 2,
+  });
+  return `${member.salaryType === "monthly" ? "Monthly" : "Daily"} salary ${amount}`;
 }
