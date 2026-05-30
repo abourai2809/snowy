@@ -263,21 +263,14 @@ function renderStoreAction({
       );
     case "move-to-display":
       return (
-        <>
-          <section className="card">
-            <div className="card-title">Deep freezer pans</div>
-            {backupPans.length === 0 ? <p className="muted-copy">No deep freezer pans.</p> : null}
-            <PanRows pans={backupPans} flavours={flavours} />
-          </section>
-          <DisplayMovementForm
-            {...actor}
-            locationId={locationId}
-            backupPans={backupPans}
-            displayPans={displayPans}
-            flavours={flavours}
-            onChanged={() => void load()}
-          />
-        </>
+        <DisplayMovementForm
+          {...actor}
+          locationId={locationId}
+          backupPans={backupPans}
+          displayPans={displayPans}
+          flavours={flavours}
+          onChanged={() => void load()}
+        />
       );
     case "deep-freezer-weights":
       return <DeepFreezerCountForm {...actor} locationId={locationId} businessDate={todayDate()} flavours={flavours} />;

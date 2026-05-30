@@ -44,6 +44,13 @@ export interface CheckoutDisplayPanInput extends StoreActor {
   weightKg: number;
 }
 
+export interface SwapDisplayPanInput extends StoreActor {
+  panUuid: string;
+  storeLocationId: string;
+  checkoutPanUuid?: string | null;
+  checkoutWeightKg?: number | null;
+}
+
 export interface EodCountInput extends StoreActor {
   locationId: string;
   businessDate: string;
@@ -555,6 +562,60 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
     status: "display",
   });
   return movement;
+}
+
+function displayMovementForPan(input: SwapDisplayPanInput, pan: Pan): DisplayMovementInput {
+  const isPartial =
+    pan.status === "returned" ||
+    (pan.fullWeightKg !== null && pan.currentWeightKg !== null && pan.currentWeightKg < pan.fullWeightKg);
+
+  return {
+    panUuid: input.panUuid,
+    storeLocationId: input.storeLocationId,
+    fillState: isPartial ? "partial" : "full",
+    weightKg: isPartial ? pan.currentWeightKg : null,
+    actorId: input.actorId,
+    actorRole: input.actorRole,
+    actorLocationId: input.actorLocationId,
+  };
+}
+
+export async function swapPanToDisplay(input: SwapDisplayPanInput): Promise<DisplayMovement> {
+  assertStoreLocation(input, input.storeLocationId);
+
+  const backupPans = await listBackupPans(input.storeLocationId);
+  const pan = backupPans.find((item) => item.id === input.panUuid);
+  if (!pan) {
+    throw new Error("Only deep freezer pans in this store can be moved to display.");
+  }
+  if (isActiveDisplayAssignment(pan)) {
+    throw new Error("Choose a deep freezer pan that is not already assigned to display.");
+  }
+
+  const displayPans = await listDisplayPans(input.storeLocationId);
+  const currentDisplayPan = displayPans.find((item) => item.flavourId === pan.flavourId && item.id !== pan.id);
+  if (currentDisplayPan) {
+    if (input.checkoutPanUuid !== currentDisplayPan.id) {
+      throw new Error("Confirm checkout for the current display pan before swapping.");
+    }
+    if (input.checkoutWeightKg === null || input.checkoutWeightKg === undefined) {
+      throw new Error("Choose how to check out the current display pan.");
+    }
+  }
+
+  const movementInput = displayMovementForPan(input, pan);
+  if (currentDisplayPan) {
+    await checkoutDisplayPan({
+      panUuid: currentDisplayPan.id,
+      storeLocationId: input.storeLocationId,
+      weightKg: input.checkoutWeightKg!,
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+      actorLocationId: input.actorLocationId,
+    });
+  }
+
+  return movePanToDisplay(movementInput);
 }
 
 export async function checkoutDisplayPan(input: CheckoutDisplayPanInput): Promise<Pan> {

@@ -90,9 +90,10 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - Browser location mismatch shows a strong warning, but staff can explicitly continue when they are sure the selected store/action is correct.
 - Receive incoming lab dispatches for the active store.
 - Accepted dispatched pans become backup/deep-freezer stock at that store.
-- Move a backup pan to display by pan ID.
+- Move a deep-freezer pan to display by choosing flavour first, then an eligible pan ID for that flavour.
 - Each store can have only one active display-assigned pan per flavour.
 - A display-assigned pan keeps its pan ID attached to that flavour until it is explicitly checked out of display.
+- Replacing a flavour's display pan is a single guided swap: staff choose whether the old pan is empty or partial, enter partial weight when needed, and submit the checkout plus new display movement together.
 - Partial pans returned from display to deep freezer are shown separately from new/full deep-freezer pans.
 - Display movement requires Full or Partial. Partial requires weight.
 - EOD gelato weights are a distinct store action.
