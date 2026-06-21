@@ -573,6 +573,40 @@ button {
   color: #1b5e20;
 }
 
+.pan-id-result {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--cr);
+}
+
+.pan-id-result strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.pan-id-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pan-id-token {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pkll);
+  color: var(--pkdd);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .list-stack {
   display: grid;
   gap: 8px;

@@ -22,6 +22,7 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createdPanIds, setCreatedPanIds] = useState<string[]>([]);
 
   const selectedFlavour = useMemo(
     () => flavours.find((flavour) => flavour.id === flavourId) ?? flavours[0],
@@ -32,6 +33,8 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
     event.preventDefault();
     if (!selectedFlavour) {
       setError("Add an active flavour before recording production.");
+      setMessage(null);
+      setCreatedPanIds([]);
       return;
     }
 
@@ -39,6 +42,7 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
     if (weightError) {
       setError(weightError);
       setMessage(null);
+      setCreatedPanIds([]);
       return;
     }
 
@@ -52,10 +56,13 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
         producedBy: profile.id,
       });
       setMessage(`Created ${result.pans.length} pan${result.pans.length === 1 ? "" : "s"} for ${selectedFlavour.name}.`);
+      setCreatedPanIds(result.pans.map((pan) => pan.panId));
       setError(null);
       await onCreated();
     } catch (productionError) {
       setError(productionError instanceof Error ? productionError.message : "Unable to save production.");
+      setMessage(null);
+      setCreatedPanIds([]);
     }
   }
 
@@ -99,6 +106,16 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
           <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" />
         </label>
         {message ? <div className="alert alert-success">{message}</div> : null}
+        {createdPanIds.length ? (
+          <div className="pan-id-result" aria-label="Pan IDs to label">
+            <strong>Pan IDs to label</strong>
+            <div className="pan-id-list">
+              {createdPanIds.map((panId) => (
+                <span className="pan-id-token" key={panId}>{panId}</span>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
         <button className="primary-button" type="submit">Save production</button>
       </form>

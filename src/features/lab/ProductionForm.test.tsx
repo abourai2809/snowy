@@ -14,7 +14,7 @@ describe("ProductionForm", () => {
     resetDemoAttendanceData();
   });
 
-  it("produces unique pan IDs from flavour code, date, and sequence", async () => {
+  it("shows generated pan IDs for labelling after production is saved", async () => {
     const user = userEvent.setup();
 
     renderApp(<App initialRole="lab_staff" />);
@@ -28,6 +28,11 @@ describe("ProductionForm", () => {
     await user.clear(screen.getByLabelText("Pan count"));
     await user.type(screen.getByLabelText("Pan count"), "3");
     await user.click(screen.getByRole("button", { name: "Save production" }));
+
+    const labelIds = await screen.findByLabelText("Pan IDs to label");
+    expect(within(labelIds).getByText("PIS-20260523-01")).toBeInTheDocument();
+    expect(within(labelIds).getByText("PIS-20260523-02")).toBeInTheDocument();
+    expect(within(labelIds).getByText("PIS-20260523-03")).toBeInTheDocument();
 
     const panList = await screen.findByLabelText("Lab inventory list");
     expect(within(panList).getByText("PIS-20260523-01")).toBeInTheDocument();

@@ -76,6 +76,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 
 - Add lab production by flavour, production date, pan count, full pan weight, and notes.
 - Generate staff-friendly pan IDs from flavour short code, numeric date, and sequence.
+- Show newly generated pan IDs immediately so lab staff can label the physical pans.
 - Store batch ID separately from pan ID.
 - Add produced pans to lab inventory first.
 - Show available lab inventory.
