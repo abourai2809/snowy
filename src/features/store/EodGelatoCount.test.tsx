@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { listFlavours, resetDemoCatalogData } from "../catalog/catalogApi";
-import { createDispatch, createProduction, resetDemoLabData } from "../lab/labApi";
+import { createDispatch, createProduction, resetDemoLabData, updatePanState } from "../lab/labApi";
 import { renderApp, screen, waitFor } from "../../test/render";
 import { resetDemoDeepFreezerData, submitDeepFreezerCount } from "./deepFreezerApi";
 import { EodGelatoCount } from "./EodGelatoCount";
@@ -168,7 +168,7 @@ describe("store EOD gelato counts", () => {
     );
   });
 
-  it("records display flavour weights when a pan ID is unavailable", async () => {
+  it("infers the active display pan from a flavour-level EOD weight", async () => {
     const [displayPanUuid] = await seedStorePans(1);
     const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PIS");
     expect(flavour).toBeDefined();
@@ -193,9 +193,103 @@ describe("store EOD gelato counts", () => {
     });
 
     expect(count.items).toHaveLength(1);
-    expect(count.items[0].panId).toBeNull();
+    expect(count.items[0].panId).toBe(displayPanUuid);
     expect(count.items[0].flavourId).toBe(flavour!.id);
     expect(count.items[0].weightKg).toBe(1.15);
+
+    const [displayPans, backupPans] = await Promise.all([listDisplayPans("malsi"), listBackupPans("malsi")]);
+    expect(displayPans).toEqual([expect.objectContaining({ id: displayPanUuid, status: "returned", currentWeightKg: 1.15 })]);
+    expect(backupPans).toEqual([expect.objectContaining({ id: displayPanUuid, status: "returned", currentWeightKg: 1.15 })]);
+  });
+
+  it("keeps unmatched flavour-level EOD rows for review when no active display pan exists", async () => {
+    const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PIS");
+    expect(flavour).toBeDefined();
+
+    const count = await submitEodGelatoCount({
+      locationId: "malsi",
+      businessDate: todayDate(),
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ flavourId: flavour!.id, weightKg: 1.15 }],
+    });
+
+    expect(count.items).toHaveLength(1);
+    expect(count.items[0].panId).toBeNull();
+    expect(count.items[0].flavourId).toBe(flavour!.id);
+    expect(count.items[0].notes).toBe("review: no active display pan for this flavour");
+  });
+
+  it("flags over-capacity flavour-level EOD rows for review", async () => {
+    const [displayPanUuid] = await seedStorePans(1);
+    const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PIS");
+    expect(flavour).toBeDefined();
+    await movePanToDisplay({
+      panUuid: displayPanUuid,
+      storeLocationId: "malsi",
+      fillState: "full",
+      weightKg: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    const count = await submitEodGelatoCount({
+      locationId: "malsi",
+      businessDate: todayDate(),
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ flavourId: flavour!.id, weightKg: 4 }],
+    });
+
+    expect(count.items).toHaveLength(1);
+    expect(count.items[0].panId).toBeNull();
+    expect(count.items[0].notes).toBe("review: EOD display weight exceeds active display pan capacity");
+  });
+
+  it("allocates flavour-level EOD weight across multiple active display pans using FIFO review notes", async () => {
+    const [olderPanUuid, newerPanUuid] = await seedStorePans(2);
+    const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PIS");
+    expect(flavour).toBeDefined();
+    await Promise.all([
+      updatePanState(olderPanUuid, {
+        panRole: "display",
+        status: "display",
+        currentWeightKg: 3.5,
+      }),
+      updatePanState(newerPanUuid, {
+        panRole: "display",
+        status: "display",
+        currentWeightKg: 3.5,
+      }),
+    ]);
+
+    const count = await submitEodGelatoCount({
+      locationId: "malsi",
+      businessDate: todayDate(),
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+      items: [{ flavourId: flavour!.id, weightKg: 4 }],
+    });
+
+    expect(count.items).toEqual([
+      expect.objectContaining({
+        panId: olderPanUuid,
+        weightKg: 0.5,
+        notes: "review: multiple active display pans; FIFO allocation applied",
+      }),
+      expect.objectContaining({
+        panId: newerPanUuid,
+        weightKg: 3.5,
+        notes: "review: multiple active display pans; FIFO allocation applied",
+      }),
+    ]);
   });
 
   it("flags gram-style EOD weights", async () => {
@@ -306,7 +400,7 @@ describe("store EOD gelato counts", () => {
     expect(screen.queryByLabelText(/EOD gelato item/)).not.toBeInTheDocument();
   });
 
-  it("shows flavour first and pan ID second for display pan rows", async () => {
+  it("shows flavour first with display-pan count detail", async () => {
     const [displayPanUuid] = await seedStorePans(1);
     const flavours = await listFlavours(true);
     await movePanToDisplay({
@@ -332,7 +426,8 @@ describe("store EOD gelato counts", () => {
     );
 
     await waitFor(() => expect(screen.getByText("PISTACHTO")).toBeInTheDocument());
-    expect(screen.getByText(/PIS-20260523-01/)).toBeInTheDocument();
+    expect(screen.getByText("1 display pan")).toBeInTheDocument();
+    expect(screen.queryByText(/PIS-20260523-01/)).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });

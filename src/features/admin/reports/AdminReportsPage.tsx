@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AttendanceEntry, AttendanceSelfieCheck } from "../../../domain/attendance";
 import type { Dispatch } from "../../../domain/dispatches";
-import type { DeepFreezerCountWithItems } from "../../../domain/inventory";
+import type { DeepFreezerCountWithItems, EmptyPanPhysicalCount, EmptyPanReturn } from "../../../domain/inventory";
 import type { StaffProfile } from "../../../domain/roles";
 import type { InventoryCountWithItems } from "../../../domain/supplies";
 import { listStaff } from "../staff/staffApi";
@@ -9,7 +9,14 @@ import { listAttendanceForDate, listSelfieChecksForAttendanceIds } from "../../a
 import { listInventoryCounts } from "../../inventory/inventoryApi";
 import { listLabDispatches } from "../../lab/labApi";
 import { listDeepFreezerCounts, MORNING_VERIFICATION_TOLERANCE_KG } from "../../store/deepFreezerApi";
-import { listEmptyPanCountsByStore, listEodGelatoCounts, type EodCountWithItems, type StoreEmptyPanCount } from "../../store/storeApi";
+import {
+  listEmptyPanCountsByStore,
+  listEmptyPanReturns,
+  listEodGelatoCounts,
+  listPhysicalEmptyPanCounts,
+  type EodCountWithItems,
+  type StoreEmptyPanCount,
+} from "../../store/storeApi";
 import { CorrectionsPage } from "../corrections/CorrectionsPage";
 import { EodGelatoCorrectionsPage } from "../corrections/EodGelatoCorrectionsPage";
 import { AttendanceSelfieReviewPanel, formatSelfieBadge, formatSelfieDetail } from "../review/AttendanceSelfieReviewPanel";
@@ -25,6 +32,8 @@ export function AdminReportsPage() {
   const [morningChecks, setMorningChecks] = useState<DeepFreezerCountWithItems[]>([]);
   const [inventoryCounts, setInventoryCounts] = useState<InventoryCountWithItems[]>([]);
   const [emptyPanCounts, setEmptyPanCounts] = useState<StoreEmptyPanCount[]>([]);
+  const [emptyPanReturns, setEmptyPanReturns] = useState<EmptyPanReturn[]>([]);
+  const [physicalEmptyCounts, setPhysicalEmptyCounts] = useState<EmptyPanPhysicalCount[]>([]);
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [selfieChecks, setSelfieChecks] = useState<AttendanceSelfieCheck[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
@@ -38,6 +47,8 @@ export function AdminReportsPage() {
         morningRows,
         inventoryRows,
         emptyPanRows,
+        emptyPanReturnRows,
+        physicalEmptyRows,
         attendanceRows,
         staffRows,
       ] = await Promise.all([
@@ -46,6 +57,8 @@ export function AdminReportsPage() {
         listDeepFreezerCounts("morning"),
         listInventoryCounts(),
         listEmptyPanCountsByStore(),
+        listEmptyPanReturns(),
+        listPhysicalEmptyPanCounts(),
         listAttendanceForDate(todayDate()),
         listStaff(),
       ]);
@@ -56,6 +69,8 @@ export function AdminReportsPage() {
       setMorningChecks(morningRows);
       setInventoryCounts(inventoryRows);
       setEmptyPanCounts(emptyPanRows);
+      setEmptyPanReturns(emptyPanReturnRows);
+      setPhysicalEmptyCounts(physicalEmptyRows);
       setAttendance(attendanceRows);
       setSelfieChecks(selfieRows);
       setStaff(staffRows);
@@ -142,6 +157,37 @@ export function AdminReportsPage() {
             detail: "Closed display pans at store",
             badge: `${count.emptyPanCount}`,
           }))}
+        />
+      </section>
+
+      <section className="card">
+        <div className="card-title">Empty pan returns</div>
+        {emptyPanReturns.length === 0 ? <p className="muted-copy">No empty pan returns yet.</p> : null}
+        <ReportRows
+          rows={emptyPanReturns.slice(0, 10).map((emptyReturn) => ({
+            id: emptyReturn.id,
+            title: emptyReturn.sourceLocationId,
+            detail: `${emptyReturn.quantity} pans to ${emptyReturn.destinationLocationId}`,
+            badge: emptyReturn.status.replace("_", " "),
+          }))}
+        />
+      </section>
+
+      <section className="card">
+        <div className="card-title">Empty pan count reviews</div>
+        {physicalEmptyCounts.filter((count) => count.status === "flagged").length === 0 ? (
+          <p className="muted-copy">No empty pan count discrepancies.</p>
+        ) : null}
+        <ReportRows
+          rows={physicalEmptyCounts
+            .filter((count) => count.status === "flagged")
+            .slice(0, 10)
+            .map((count) => ({
+              id: count.id,
+              title: count.locationId,
+              detail: `${count.businessDate} physical ${count.physicalCount} / app ${count.appCalculatedCount}`,
+              badge: `${count.variance > 0 ? "+" : ""}${count.variance}`,
+            }))}
         />
       </section>
 

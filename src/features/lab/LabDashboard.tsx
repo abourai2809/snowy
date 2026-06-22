@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { InventoryCountPage } from "../inventory/InventoryCountPage";
 import { UrgentRequirementsPanel } from "../urgentRequirements/UrgentRequirementsPanel";
 import { DispatchForm } from "./DispatchForm";
+import { EmptyPanReturnsPanel } from "./EmptyPanReturnsPanel";
 import { LabRequirements } from "./LabRequirements";
 import { PanList } from "./PanList";
 import { ProductionForm } from "./ProductionForm";
@@ -46,6 +47,7 @@ export function LabDashboard() {
       <ProductionForm flavours={flavours} profile={profile} onCreated={refresh} />
       <PanList pans={pans} flavours={flavours} />
       <DispatchForm pans={availablePans} flavours={flavours} profile={profile} onDispatched={refresh} />
+      <EmptyPanReturnsPanel profile={profile} />
       <LabRequirements />
       <InventoryCountPage title="Lab checklist" scope="lab" kinds={["raw_material", "supply", "packaging"]} />
       <section className="card">

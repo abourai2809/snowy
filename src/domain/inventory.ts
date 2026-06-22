@@ -2,6 +2,8 @@ export type FillState = "full" | "partial";
 export type ReceiptStatus = "accepted" | "rejected";
 export type CountStatus = "draft" | "submitted" | "corrected";
 export type DeepFreezerCountType = "eod" | "morning";
+export type EmptyPanReturnStatus = "in_transit" | "accepted" | "disputed" | "cancelled";
+export type EmptyPanPhysicalCountStatus = "matched" | "flagged" | "resolved";
 
 export interface StoreReceipt {
   id: string;
@@ -106,4 +108,34 @@ export interface StoreGelatoRequirement {
   currentWeightKg: number;
   targetWeightKg: number;
   neededWeightKg: number;
+}
+
+export interface EmptyPanReturn {
+  id: string;
+  sourceLocationId: string;
+  destinationLocationId: string;
+  quantity: number;
+  status: EmptyPanReturnStatus;
+  createdBy: string | null;
+  sentAt: string;
+  receivedBy: string | null;
+  receivedAt: string | null;
+  notes: string | null;
+  resolutionNotes: string | null;
+}
+
+export interface EmptyPanPhysicalCount {
+  id: string;
+  locationId: string;
+  businessDate: string;
+  countType: DeepFreezerCountType;
+  physicalCount: number;
+  appCalculatedCount: number;
+  variance: number;
+  status: EmptyPanPhysicalCountStatus;
+  countedBy: string | null;
+  countedAt: string;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  notes: string | null;
 }

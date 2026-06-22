@@ -14,11 +14,15 @@ import { IncomingDispatches } from "./IncomingDispatches";
 import { DisplayMovementForm } from "./DisplayMovementForm";
 import { DeepFreezerCountForm } from "./DeepFreezerCountForm";
 import { EodGelatoCount } from "./EodGelatoCount";
+import { EmptyPanPhysicalCountForm } from "./EmptyPanPhysicalCountForm";
+import { EmptyPanReturnForm } from "./EmptyPanReturnForm";
 import { MorningInventoryVerification } from "./MorningInventoryVerification";
 import {
   listBackupPans,
   listDisplayPans,
+  listEmptyPanCountsByStore,
   listIncomingDispatches,
+  listRejectedDispatches,
   type IncomingDispatch,
   type StoreActor,
 } from "./storeApi";
@@ -30,6 +34,8 @@ const STORE_ACTIONS = [
   { id: "move-to-display", label: "Move to display", workflowName: "move to display" },
   { id: "deep-freezer-weights", label: "Deep freezer count", workflowName: "EOD deep freezer weights" },
   { id: "eod-gelato-weights", label: "EOD gelato weights", workflowName: "EOD gelato weights" },
+  { id: "empty-pan-count", label: "Empty pan count", workflowName: "physical empty pan count" },
+  { id: "empty-pan-return", label: "Return empties", workflowName: "empty pan return" },
   { id: "store-supply-checklist", label: "Supply count", workflowName: "store supply checklist" },
 ] as const;
 
@@ -39,8 +45,10 @@ export function StoreDashboard() {
   const { activeAttendanceLoading, activeLocationId, profile } = useAuth();
   const [flavours, setFlavours] = useState<Flavour[]>([]);
   const [incoming, setIncoming] = useState<IncomingDispatch[]>([]);
+  const [rejectedDispatches, setRejectedDispatches] = useState<IncomingDispatch[]>([]);
   const [backupPans, setBackupPans] = useState<Pan[]>([]);
   const [displayPans, setDisplayPans] = useState<Pan[]>([]);
+  const [emptyPanCount, setEmptyPanCount] = useState(0);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [activeActionId, setActiveActionId] = useState<StoreActionId | null>(null);
   const [urgentRefreshKey, setUrgentRefreshKey] = useState(0);
@@ -71,17 +79,21 @@ export function StoreDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [activeFlavours, incomingDispatches, backup, display, locationRows] = await Promise.all([
+      const [activeFlavours, incomingDispatches, rejectedRows, backup, display, emptyPanRows, locationRows] = await Promise.all([
         listFlavours(true),
         listIncomingDispatches(locationId),
+        listRejectedDispatches(locationId),
         listBackupPans(locationId),
         listDisplayPans(locationId),
+        listEmptyPanCountsByStore(locationId),
         listLocations(),
       ]);
       setFlavours(activeFlavours);
       setIncoming(incomingDispatches);
+      setRejectedDispatches(rejectedRows);
       setBackupPans(backup);
       setDisplayPans(display);
+      setEmptyPanCount(emptyPanRows.find((count) => count.locationId === locationId)?.emptyPanCount ?? 0);
       setLocations(locationRows);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load store.");
@@ -135,8 +147,10 @@ export function StoreDashboard() {
             actor,
             backupPans,
             displayPans,
+            emptyPanCount,
             flavours,
             incoming,
+            rejectedDispatches,
             load,
             locationId,
             profile,
@@ -214,8 +228,10 @@ interface StoreActionContext {
   actor: StoreActor;
   backupPans: Pan[];
   displayPans: Pan[];
+  emptyPanCount: number;
   flavours: Flavour[];
   incoming: IncomingDispatch[];
+  rejectedDispatches: IncomingDispatch[];
   load: () => Promise<void>;
   locationId: string;
   profile: StaffProfile;
@@ -228,8 +244,10 @@ function renderStoreAction({
   actor,
   backupPans,
   displayPans,
+  emptyPanCount,
   flavours,
   incoming,
+  rejectedDispatches,
   load,
   locationId,
   profile,
@@ -243,6 +261,7 @@ function renderStoreAction({
           {...actor}
           locationId={locationId}
           dispatches={incoming}
+          rejectedDispatches={rejectedDispatches}
           flavours={flavours}
           onChanged={() => void load()}
         />
@@ -290,6 +309,25 @@ function renderStoreAction({
             onChanged={() => void load()}
           />
         </>
+      );
+    case "empty-pan-count":
+      return (
+        <EmptyPanPhysicalCountForm
+          {...actor}
+          locationId={locationId}
+          businessDate={todayDate()}
+          appEmptyPanCount={emptyPanCount}
+          onChanged={() => void load()}
+        />
+      );
+    case "empty-pan-return":
+      return (
+        <EmptyPanReturnForm
+          {...actor}
+          locationId={locationId}
+          appEmptyPanCount={emptyPanCount}
+          onChanged={() => void load()}
+        />
       );
     case "store-supply-checklist":
       return <InventoryCountPage title="Store supply checklist" scope="store" />;

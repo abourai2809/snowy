@@ -6,14 +6,14 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 
 - Mobile-first browser app backed by Supabase.
 - Vercel hosts the frontend.
-- Supabase stores auth, staff profiles, catalog, attendance, inventory, dispatches, pan state, EOD counts, corrections, and QueueBuster job requests.
+- Supabase stores auth, staff profiles, catalog, attendance, inventory, dispatches, pan state, EOD counts, empty-pan returns/reconciliations, corrections, and QueueBuster job requests.
 - QueueBuster browser automation is deferred to a separate always-on worker/VM and must not run in frontend code.
 
 ## Personas
 
 - Admin: manages catalog, locations, staff, attendance settings, correction workflows, reports, and QueueBuster job requests.
-- Lab Staff/Lab Manager: records production, sees lab inventory, and dispatches available pans to stores.
-- Store Staff: checks in to a store, receives incoming dispatches, moves backup pans to display, submits EOD gelato weights, submits deep-freezer/morning counts, submits supply counts, and logs urgent requirements.
+- Lab Staff/Lab Manager: records production, sees lab inventory, dispatches available pans to stores, and receives empty-pan returns from stores.
+- Store Staff: checks in to a store, receives incoming dispatches, moves backup pans to display, submits EOD gelato weights, submits deep-freezer/morning counts, records physical empty-pan counts, returns empty pans to lab, submits supply counts, and logs urgent requirements.
 - Store Manager: performs store workflows and can correct same-day store submissions.
 
 ## Admin Features
@@ -45,6 +45,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
   - morning freezer checks,
   - supply counts,
   - empty pan counts by store,
+  - empty pan returns and physical count reviews,
   - today attendance roster,
   - date-range attendance review with CSV export and browser PDF export.
 - Correct historical EOD gelato counts and inventory counts frictionlessly for MVP.
@@ -83,6 +84,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - Move selected available lab inventory to a store through dispatch.
 - Dispatch changes selected pans to in transit and removes them from available lab stock.
 - Lab inventory and dispatch are separate workflows.
+- Lab can accept or dispute empty-pan returns sent back by stores.
 - Lab can see store requirements derived from store target weights and projected deep-freezer balances.
 
 ## Store Gelato Features
@@ -96,17 +98,25 @@ Detailed pan lifecycle rules are documented in [pan-workflow.md](pan-workflow.md
 - Browser location mismatch shows a strong warning, but staff can explicitly continue when they are sure the selected store/action is correct.
 - Receive incoming lab dispatches for the active store.
 - Accepted dispatched pans become backup/deep-freezer stock at that store.
+- Rejected dispatches stay out of backup stock and can be overturned from the rejected queue if the rejection was a mistake.
 - Move a deep-freezer pan to display by choosing flavour first, then an eligible pan ID for that flavour.
+- The first eligible pan option is FIFO-recommended from the oldest store backup pan for that flavour.
 - Each store can have only one active display-assigned pan per flavour.
+- Each store can have only one open or partial pan per flavour.
 - A display-assigned pan keeps its pan ID attached to that flavour until it is explicitly checked out of display.
-- Replacing a flavour's display pan is a single guided swap: staff choose whether the old pan is empty or partial, enter partial weight when needed, and submit the checkout plus new display movement together.
+- Replacing a flavour's display pan is a single guided swap: staff choose whether the old pan is empty, too low, or partial, enter partial weight when needed, and submit the checkout plus new display movement together.
+- Too-low checkout marks the old display pan empty in the app, even if some gelato remains physically.
 - Partial pans returned from display to deep freezer are shown separately from new/full deep-freezer pans.
 - Display movement requires Full or Partial. Partial requires weight.
 - EOD gelato weights are a distinct store action.
 - EOD gelato rows are prefilled from relevant display/deep-freezer stock to reduce missed entries.
-- EOD display rows show flavour name first and pan ID below it.
+- EOD display rows are flavour-level rows with display-pan count detail; the backend assigns the weight to active display pans when possible.
 - Staff enter weights in kg; gram-like values such as 6000 are blocked.
 - EOD submission updates pan lifecycle automatically:
+  - one active display pan gets the flavour-level EOD weight,
+  - no active display pan saves a flavour-level review row,
+  - multiple active display pans are allocated FIFO and flagged for review,
+  - over-capacity EOD weights are saved for review without lifecycle mutation,
   - non-empty display pans return to deep-freezer stock as partial pans while keeping the active display assignment,
   - zero-weight display pans are closed as depleted/empty,
   - pan lifecycle events are recorded.
@@ -115,7 +125,9 @@ Detailed pan lifecycle rules are documented in [pan-workflow.md](pan-workflow.md
   - accepted receipts after baseline,
   - display movement weights after baseline,
   - returned display weights after EOD.
-- Empty pan count is backend-calculated by store from closed zero-weight pans.
+- Empty pan count is backend-calculated by store from closed zero-weight pans minus active empty-pan returns sent to the lab.
+- Store staff can record beginning-of-day or end-of-day physical empty-pan counts. A mismatch from the app-calculated count is flagged for Store Manager/Admin review.
+- Store staff can send empty pans back to the lab by quantity; lab staff accept or dispute the return.
 - Detailed pan-to-pan consolidation/refill tracking is deferred.
 
 ## Store Deep-Freezer And Requirements

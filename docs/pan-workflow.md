@@ -91,10 +91,10 @@ flowchart TD
   AP --> AQ["Still counts as the one open/partial pan for that store and flavour"]
 
   Z --> AR["Store creates empty-pan return to lab"]
-  AR --> AS["Return is in transit"]
+  AR --> AS["Return is in transit; store empty count decreases"]
   AS --> AT{"Lab accepts empty pans"}
-  AT -- "Accept" --> AU["Store empty count decreases; lab empty count increases"]
-  AT -- "Dispute or reject" --> AV["Return stays open for correction"]
+  AT -- "Accept" --> AU["Lab records received empty pans"]
+  AT -- "Dispute or reject" --> AV["Return stays open and flagged for correction"]
 ```
 
 ## Workflow Details
@@ -111,7 +111,7 @@ Lab dispatch selects from lab-available pans only. A pan that is already dispatc
 
 Store staff accept or reject incoming dispatches. Accepted pans become store backup/deep-freezer stock. Rejected pans do not enter store inventory.
 
-If a rejection was accidental, Store Manager or Admin should be able to overturn the rejection and accept the pan, provided the pan has not already been otherwise resolved. The overturn must create a correction event.
+If a rejection was accidental, the store can overturn the rejection from the rejected queue and accept the pan, provided the dispatch has not already been otherwise resolved. The overturn must create an audit/receipt record.
 
 ### FIFO Display Movement
 
@@ -158,7 +158,7 @@ If the counts differ, the app flags the discrepancy for Store Staff, Store Manag
 
 Stores need a reverse-dispatch workflow for empty pans. Store staff enter how many empty pans are being sent back to the lab. The return remains in transit until lab staff accept it.
 
-Accepted returns decrease the store empty-pan count and increase the lab empty-pan count or lab received-empty-pan total. If lab disputes the quantity, the return should stay open for correction.
+Creating an active return decreases the store app-calculated empty-pan count immediately so the same empty pans cannot be sent twice. Lab acceptance records the lab receipt. If lab disputes the quantity, the return should stay open for correction/review.
 
 ## Contingencies
 

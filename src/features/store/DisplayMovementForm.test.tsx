@@ -6,6 +6,7 @@ import {
   checkoutDisplayPan,
   listBackupPans,
   listDisplayPans,
+  listEmptyPanCountsByStore,
   listIncomingDispatches,
   movePanToDisplay,
   listPanEvents,
@@ -193,6 +194,48 @@ describe("store display movement", () => {
     );
   });
 
+  it("requires the outgoing display pan to be marked empty before selecting another partial pan", async () => {
+    const [firstPanUuid, secondPanUuid] = await seedAcceptedStorePans(2);
+    await movePanToDisplay({
+      panUuid: firstPanUuid,
+      storeLocationId: "malsi",
+      fillState: "full",
+      weightKg: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+    await checkoutDisplayPan({
+      panUuid: firstPanUuid,
+      storeLocationId: "malsi",
+      weightKg: 1.4,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+    await swapPanToDisplay({
+      panUuid: secondPanUuid,
+      storeLocationId: "malsi",
+      checkoutPanUuid: firstPanUuid,
+      checkoutWeightKg: 1.4,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    await expect(
+      swapPanToDisplay({
+        panUuid: firstPanUuid,
+        storeLocationId: "malsi",
+        checkoutPanUuid: secondPanUuid,
+        checkoutWeightKg: 1.1,
+        actorId: "staff-store",
+        actorRole: "store_staff",
+        actorLocationId: "malsi",
+      }),
+    ).rejects.toThrow("Only one open or partial pan is allowed for this flavour at this store.");
+  });
+
   it("filters pan IDs by selected flavour and swaps from the form", async () => {
     const user = userEvent.setup();
     const [currentPanUuid, replacementPanUuid] = await seedAcceptedStorePans(2, "PIS");
@@ -241,6 +284,54 @@ describe("store display movement", () => {
 
     await waitFor(() => expect(screen.getByText("Display pan swapped.")).toBeInTheDocument());
     await expect(listDisplayPans("malsi")).resolves.toEqual([expect.objectContaining({ id: replacementPanUuid })]);
+  });
+
+  it("recommends the FIFO pan and marks the outgoing low-weight display pan empty during swap", async () => {
+    const user = userEvent.setup();
+    const [currentPanUuid, replacementPanUuid] = await seedAcceptedStorePans(2, "PIS");
+    await movePanToDisplay({
+      panUuid: currentPanUuid,
+      storeLocationId: "malsi",
+      fillState: "full",
+      weightKg: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+    const [flavours, backupPans, displayPans] = await Promise.all([
+      listFlavours(true),
+      listBackupPans("malsi"),
+      listDisplayPans("malsi"),
+    ]);
+    const pistachio = flavours.find((flavour) => flavour.shortCode === "PIS");
+    expect(pistachio).toBeDefined();
+
+    renderApp(
+      <DisplayMovementForm
+        locationId="malsi"
+        backupPans={backupPans}
+        displayPans={displayPans}
+        flavours={flavours}
+        onChanged={() => undefined}
+        actorId="staff-store"
+        actorRole="store_staff"
+        actorLocationId="malsi"
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText("Flavour"), pistachio!.id);
+    const panSelect = screen.getByLabelText("Pan ID");
+    expect(within(panSelect).getByRole("option", { name: /Recommended FIFO - PISTACHTO - PIS-20260523-02/ })).toBeInTheDocument();
+
+    await user.selectOptions(panSelect, replacementPanUuid);
+    await user.selectOptions(screen.getByLabelText("Checkout"), "too_low");
+    expect(screen.queryByLabelText(/Checkout weight/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Swap pan" }));
+
+    await waitFor(() => expect(screen.getByText("Display pan swapped.")).toBeInTheDocument());
+    await expect(listDisplayPans("malsi")).resolves.toEqual([expect.objectContaining({ id: replacementPanUuid })]);
+    await expect(listBackupPans("malsi")).resolves.not.toEqual(expect.arrayContaining([expect.objectContaining({ id: currentPanUuid })]));
+    await expect(listEmptyPanCountsByStore("malsi")).resolves.toEqual([{ locationId: "malsi", emptyPanCount: 1 }]);
   });
 });
 

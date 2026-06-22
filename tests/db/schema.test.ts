@@ -33,6 +33,8 @@ const expectedTables = [
   "display_movements",
   "end_of_day_counts",
   "end_of_day_count_items",
+  "empty_pan_returns",
+  "physical_empty_pan_counts",
   "inventory_adjustments",
   "attendance_entries",
   "attendance_location_segments",

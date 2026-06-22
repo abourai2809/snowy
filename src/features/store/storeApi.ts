@@ -1,5 +1,15 @@
 import type { Dispatch } from "../../domain/dispatches";
-import type { EodCount, EodCountItem, DisplayMovement, FillState, StoreReceipt } from "../../domain/inventory";
+import type {
+  DeepFreezerCountType,
+  EmptyPanPhysicalCount,
+  EmptyPanReturn,
+  EmptyPanReturnStatus,
+  EodCount,
+  EodCountItem,
+  DisplayMovement,
+  FillState,
+  StoreReceipt,
+} from "../../domain/inventory";
 import { isActiveDisplayAssignment, isDeepFreezerPan } from "../../domain/pans";
 import type { Pan, PanEvent, PanRole } from "../../domain/pans";
 import { isStoreRole, type AppRole } from "../../domain/roles";
@@ -30,6 +40,9 @@ export interface AcceptDispatchInput extends StoreActor {
   locationId: string;
   notes: string | null;
 }
+
+export type RejectDispatchInput = AcceptDispatchInput;
+export type OverturnRejectedDispatchInput = AcceptDispatchInput;
 
 export interface DisplayMovementInput extends StoreActor {
   panUuid: string;
@@ -79,6 +92,37 @@ export interface StoreEmptyPanCount {
   emptyPanCount: number;
 }
 
+export interface EmptyPanReturnInput extends StoreActor {
+  sourceLocationId: string;
+  quantity: number;
+  notes: string | null;
+}
+
+export interface EmptyPanReturnResolutionInput extends StoreActor {
+  returnId: string;
+  notes: string | null;
+}
+
+export interface EmptyPanPhysicalCountInput extends StoreActor {
+  locationId: string;
+  businessDate: string;
+  countType: DeepFreezerCountType;
+  physicalCount: number;
+  notes: string | null;
+}
+
+export interface EmptyPanPhysicalCountResolutionInput extends StoreActor {
+  countId: string;
+  notes: string | null;
+}
+
+type NormalizedEodItem = {
+  panUuid: string | null;
+  flavourId: string | null;
+  weightKg: number;
+  notes?: string | null;
+};
+
 interface PanEventInput {
   panUuid: string;
   eventType: string;
@@ -96,6 +140,8 @@ let demoDisplayMovements: DisplayMovement[] = [];
 let demoEodCounts: EodCount[] = [];
 let demoEodCountItems: EodCountItem[] = [];
 let demoPanEvents: PanEvent[] = [];
+let demoEmptyPanReturns: EmptyPanReturn[] = [];
+let demoEmptyPanPhysicalCounts: EmptyPanPhysicalCount[] = [];
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -173,6 +219,40 @@ function mapPanEvent(row: Record<string, unknown>): PanEvent {
   };
 }
 
+function mapEmptyPanReturn(row: Record<string, unknown>): EmptyPanReturn {
+  return {
+    id: String(row.id),
+    sourceLocationId: String(row.source_location_id),
+    destinationLocationId: String(row.destination_location_id),
+    quantity: Number(row.quantity),
+    status: row.status as EmptyPanReturnStatus,
+    createdBy: row.created_by ? String(row.created_by) : null,
+    sentAt: String(row.sent_at),
+    receivedBy: row.received_by ? String(row.received_by) : null,
+    receivedAt: row.received_at ? String(row.received_at) : null,
+    notes: row.notes ? String(row.notes) : null,
+    resolutionNotes: row.resolution_notes ? String(row.resolution_notes) : null,
+  };
+}
+
+function mapEmptyPanPhysicalCount(row: Record<string, unknown>): EmptyPanPhysicalCount {
+  return {
+    id: String(row.id),
+    locationId: String(row.location_id),
+    businessDate: String(row.business_date),
+    countType: row.count_type as DeepFreezerCountType,
+    physicalCount: Number(row.physical_count),
+    appCalculatedCount: Number(row.app_calculated_count),
+    variance: Number(row.variance),
+    status: row.status as EmptyPanPhysicalCount["status"],
+    countedBy: row.counted_by ? String(row.counted_by) : null,
+    countedAt: String(row.counted_at),
+    resolvedBy: row.resolved_by ? String(row.resolved_by) : null,
+    resolvedAt: row.resolved_at ? String(row.resolved_at) : null,
+    notes: row.notes ? String(row.notes) : null,
+  };
+}
+
 function isGelatoEodItem(item: EodCountItem): boolean {
   return item.panId !== null || item.flavourId !== null;
 }
@@ -183,6 +263,8 @@ export function resetDemoStoreData() {
   demoEodCounts = [];
   demoEodCountItems = [];
   demoPanEvents = [];
+  demoEmptyPanReturns = [];
+  demoEmptyPanPhysicalCounts = [];
 }
 
 function assertStoreLocation(actor: StoreActor, locationId: string) {
@@ -211,13 +293,79 @@ function assertCanCorrectCount(actor: StoreActor, businessDate: string) {
   throw new Error("Only Store Manager or Admin can correct this count.");
 }
 
-async function createReceipt(input: AcceptDispatchInput): Promise<StoreReceipt> {
+function assertLabOrAdmin(actor: StoreActor) {
+  if (actor.actorRole === "admin" || actor.actorRole === "lab_manager" || actor.actorRole === "lab_staff") {
+    return;
+  }
+
+  throw new Error("Only Lab or Admin can receive empty pan returns.");
+}
+
+function assertCanResolveStoreReview(actor: StoreActor, locationId: string) {
+  if (actor.actorRole === "admin") {
+    return;
+  }
+
+  if (actor.actorRole === "store_manager" && actor.actorLocationId === locationId) {
+    return;
+  }
+
+  throw new Error("Only Store Manager or Admin can resolve this review.");
+}
+
+function assertPositiveWholeQuantity(quantity: number, fieldName: string) {
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    throw new Error(`${fieldName} must be a whole number greater than zero.`);
+  }
+}
+
+function assertNonnegativeWholeQuantity(quantity: number, fieldName: string) {
+  if (!Number.isInteger(quantity) || quantity < 0) {
+    throw new Error(`${fieldName} must be a whole number zero or greater.`);
+  }
+}
+
+function sortPansFifo(pans: Pan[]): Pan[] {
+  return [...pans].sort((a, b) => {
+    const producedAt = new Date(a.producedAt).getTime() - new Date(b.producedAt).getTime();
+    if (producedAt !== 0) return producedAt;
+    return a.panId.localeCompare(b.panId);
+  });
+}
+
+function displayCapacityKg(pan: Pan): number {
+  return pan.currentWeightKg ?? pan.fullWeightKg ?? 0;
+}
+
+function isOpenOrPartialPan(pan: Pan): boolean {
+  if (!pan.active || (pan.currentWeightKg ?? 0) <= 0) return false;
+  if (pan.status === "returned") return true;
+  return (
+    pan.status === "display" &&
+    pan.fullWeightKg !== null &&
+    pan.currentWeightKg !== null &&
+    pan.currentWeightKg < pan.fullWeightKg
+  );
+}
+
+async function assertNoOtherOpenOrPartialPan(locationId: string, flavourId: string, excludedPanIds: string[] = []) {
+  const excluded = new Set(excludedPanIds);
+  const existing = (await listStorePans(locationId)).filter(
+    (pan) => pan.flavourId === flavourId && !excluded.has(pan.id) && isOpenOrPartialPan(pan),
+  );
+
+  if (existing.length > 0) {
+    throw new Error("Only one open or partial pan is allowed for this flavour at this store. Ask Admin to resolve the extra partial pan first.");
+  }
+}
+
+async function createReceipt(input: AcceptDispatchInput, status: StoreReceipt["status"] = "accepted"): Promise<StoreReceipt> {
   if (!isSupabaseConfigured) {
     const receipt: StoreReceipt = {
       id: makeId("receipt"),
       dispatchId: input.dispatchId,
       locationId: input.locationId,
-      status: "accepted",
+      status,
       receivedBy: input.actorId,
       receivedAt: new Date().toISOString(),
       notes: input.notes,
@@ -231,7 +379,7 @@ async function createReceipt(input: AcceptDispatchInput): Promise<StoreReceipt> 
     .insert({
       dispatch_id: input.dispatchId,
       location_id: input.locationId,
-      status: "accepted",
+      status,
       received_by: input.actorId,
       notes: input.notes,
     })
@@ -410,6 +558,18 @@ export async function listIncomingDispatches(locationId: string): Promise<Incomi
     (dispatch) => dispatch.toLocationId === locationId && dispatch.status === "pending",
   );
 
+  return hydrateDispatchPans(dispatches);
+}
+
+export async function listRejectedDispatches(locationId: string): Promise<IncomingDispatch[]> {
+  const dispatches = (await listLabDispatches()).filter(
+    (dispatch) => dispatch.toLocationId === locationId && dispatch.status === "rejected",
+  );
+
+  return hydrateDispatchPans(dispatches);
+}
+
+async function hydrateDispatchPans(dispatches: Dispatch[]): Promise<IncomingDispatch[]> {
   return Promise.all(
     dispatches.map(async (dispatch) => {
       const items = await listDispatchItems(dispatch.id);
@@ -434,16 +594,8 @@ export async function listStoreReceipts(locationId?: string): Promise<StoreRecei
   return data.map(mapReceipt);
 }
 
-export async function acceptIncomingDispatch(input: AcceptDispatchInput): Promise<StoreReceipt> {
-  assertStoreLocation(input, input.locationId);
-
-  const incoming = await listIncomingDispatches(input.locationId);
-  const dispatch = incoming.find((item) => item.id === input.dispatchId);
-  if (!dispatch) {
-    throw new Error("Incoming dispatch not found for this store.");
-  }
-
-  const receipt = await createReceipt(input);
+async function acceptDispatch(dispatch: IncomingDispatch, input: AcceptDispatchInput): Promise<StoreReceipt> {
+  const receipt = await createReceipt(input, "accepted");
   await Promise.all(
     dispatch.pans.map((pan) =>
       updatePanState(pan.id, {
@@ -457,6 +609,44 @@ export async function acceptIncomingDispatch(input: AcceptDispatchInput): Promis
   return receipt;
 }
 
+export async function acceptIncomingDispatch(input: AcceptDispatchInput): Promise<StoreReceipt> {
+  assertStoreLocation(input, input.locationId);
+
+  const incoming = await listIncomingDispatches(input.locationId);
+  const dispatch = incoming.find((item) => item.id === input.dispatchId);
+  if (!dispatch) {
+    throw new Error("Incoming dispatch not found for this store.");
+  }
+
+  return acceptDispatch(dispatch, input);
+}
+
+export async function rejectIncomingDispatch(input: RejectDispatchInput): Promise<StoreReceipt> {
+  assertStoreLocation(input, input.locationId);
+
+  const incoming = await listIncomingDispatches(input.locationId);
+  const dispatch = incoming.find((item) => item.id === input.dispatchId);
+  if (!dispatch) {
+    throw new Error("Incoming dispatch not found for this store.");
+  }
+
+  const receipt = await createReceipt(input, "rejected");
+  await updateDispatchStatus(input.dispatchId, "rejected");
+  return receipt;
+}
+
+export async function overturnRejectedDispatch(input: OverturnRejectedDispatchInput): Promise<StoreReceipt> {
+  assertStoreLocation(input, input.locationId);
+
+  const rejected = await listRejectedDispatches(input.locationId);
+  const dispatch = rejected.find((item) => item.id === input.dispatchId);
+  if (!dispatch) {
+    throw new Error("Rejected dispatch not found for this store.");
+  }
+
+  return acceptDispatch(dispatch, input);
+}
+
 export async function listStorePans(locationId: string): Promise<Pan[]> {
   const pans = await listAllPans();
   return pans.filter((pan) => pan.currentLocationId === locationId && pan.active);
@@ -464,7 +654,7 @@ export async function listStorePans(locationId: string): Promise<Pan[]> {
 
 export async function listBackupPans(locationId: string): Promise<Pan[]> {
   const pans = await listStorePans(locationId);
-  return pans.filter(isDeepFreezerPan);
+  return sortPansFifo(pans.filter(isDeepFreezerPan));
 }
 
 export async function listDisplayPans(locationId: string): Promise<Pan[]> {
@@ -522,6 +712,9 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
   const pan = backupPans.find((item) => item.id === input.panUuid);
   if (!pan) {
     throw new Error("Only deep freezer pans in this store can be moved to display.");
+  }
+  if (isOpenOrPartialPan(pan)) {
+    await assertNoOtherOpenOrPartialPan(input.storeLocationId, pan.flavourId, [pan.id]);
   }
 
   const displayPans = await listDisplayPans(input.storeLocationId);
@@ -601,6 +794,10 @@ export async function swapPanToDisplay(input: SwapDisplayPanInput): Promise<Disp
     if (input.checkoutWeightKg === null || input.checkoutWeightKg === undefined) {
       throw new Error("Choose how to check out the current display pan.");
     }
+    const selectedPanIsOpenOrPartial = isOpenOrPartialPan(pan);
+    if (input.checkoutWeightKg > 0 && selectedPanIsOpenOrPartial) {
+      throw new Error("Only one open or partial pan is allowed for this flavour at this store. Mark the old pan empty or choose a full pan.");
+    }
   }
 
   const movementInput = displayMovementForPan(input, pan);
@@ -659,6 +856,8 @@ export async function checkoutDisplayPan(input: CheckoutDisplayPanInput): Promis
     });
   }
 
+  await assertNoOtherOpenOrPartialPan(input.storeLocationId, pan.flavourId, [pan.id]);
+
   const alreadyInDeepFreezer = pan.status === "returned";
   if (alreadyInDeepFreezer) {
     const weightDelta = input.weightKg - (pan.currentWeightKg ?? 0);
@@ -695,6 +894,124 @@ export async function checkoutDisplayPan(input: CheckoutDisplayPanInput): Promis
   });
 }
 
+async function normalizeEodItemsForLifecycle(
+  input: EodCountInput,
+  displayPans: Pan[],
+  existingItems: EodCountItem[],
+): Promise<{ items: NormalizedEodItem[]; panById: Map<string, Pan> }> {
+  const displayPanById = new Map(displayPans.map((pan) => [pan.id, pan]));
+  const existingPanIds = new Set(existingItems.map((item) => item.panId).filter((panId): panId is string => Boolean(panId)));
+  const baseItems = input.items.map((item) => ({
+    ...item,
+    panUuid: item.panUuid ?? null,
+    flavourId: item.flavourId ?? null,
+  }));
+  const itemPanUuids = [...new Set(baseItems.map((item) => item.panUuid).filter((panUuid): panUuid is string => Boolean(panUuid)))];
+  const itemPans = await listPansByIds(itemPanUuids);
+  const panById = new Map([...displayPans, ...itemPans].map((pan) => [pan.id, pan]));
+  const activeFlavourIds = new Set((await listFlavours(true)).map((flavour) => flavour.id));
+  const movements = await listDisplayMovements(input.locationId);
+  const movedAtByPanId = new Map<string, number>();
+  movements.forEach((movement) => {
+    movedAtByPanId.set(movement.panId, new Date(movement.movedAt).getTime());
+  });
+
+  const normalizedBaseItems = baseItems.map((item) => ({
+    ...item,
+    flavourId: item.flavourId ?? (item.panUuid ? panById.get(item.panUuid)?.flavourId ?? null : null),
+  }));
+
+  const hasInvalidPan = normalizedBaseItems.some((item) => {
+    if (!item.panUuid) return false;
+
+    const pan = panById.get(item.panUuid);
+    if (!pan || pan.currentLocationId !== input.locationId) return true;
+
+    return !displayPanById.has(item.panUuid) && !existingPanIds.has(item.panUuid);
+  });
+  if (hasInvalidPan) {
+    throw new Error("End-of-day gelato counts can only include display pans.");
+  }
+
+  const hasInvalidFlavour = normalizedBaseItems.some((item) => !item.flavourId || !activeFlavourIds.has(item.flavourId));
+  if (hasInvalidFlavour) {
+    throw new Error("End-of-day gelato counts can only include active flavours or display pans.");
+  }
+
+  const inferredItems = normalizedBaseItems.flatMap((item): NormalizedEodItem[] => {
+    if (item.panUuid) {
+      return [{ panUuid: item.panUuid, flavourId: item.flavourId, weightKg: item.weightKg, notes: item.notes ?? null }];
+    }
+
+    const flavourDisplayPans = displayPans.filter((pan) => pan.flavourId === item.flavourId);
+    if (flavourDisplayPans.length === 0) {
+      return [
+        {
+          panUuid: null,
+          flavourId: item.flavourId,
+          weightKg: item.weightKg,
+          notes: "review: no active display pan for this flavour",
+        },
+      ];
+    }
+
+    const totalCapacityKg = flavourDisplayPans.reduce((sum, pan) => sum + displayCapacityKg(pan), 0);
+    if (item.weightKg > totalCapacityKg) {
+      return [
+        {
+          panUuid: null,
+          flavourId: item.flavourId,
+          weightKg: item.weightKg,
+          notes: "review: EOD display weight exceeds active display pan capacity",
+        },
+      ];
+    }
+
+    if (flavourDisplayPans.length === 1) {
+      return [
+        {
+          panUuid: flavourDisplayPans[0].id,
+          flavourId: item.flavourId,
+          weightKg: item.weightKg,
+          notes: item.notes ?? null,
+        },
+      ];
+    }
+
+    let remainingWeightKg = item.weightKg;
+    const allocationByPanId = new Map<string, number>();
+    const newestFirst = [...flavourDisplayPans].sort((a, b) => {
+      const movedAt = (movedAtByPanId.get(b.id) ?? 0) - (movedAtByPanId.get(a.id) ?? 0);
+      if (movedAt !== 0) return movedAt;
+      return b.panId.localeCompare(a.panId);
+    });
+
+    newestFirst.forEach((pan) => {
+      const allocated = Math.min(displayCapacityKg(pan), remainingWeightKg);
+      allocationByPanId.set(pan.id, allocated);
+      remainingWeightKg -= allocated;
+    });
+
+    return [...flavourDisplayPans]
+      .sort((a, b) => {
+        const movedAt = (movedAtByPanId.get(a.id) ?? 0) - (movedAtByPanId.get(b.id) ?? 0);
+        if (movedAt !== 0) return movedAt;
+        return a.panId.localeCompare(b.panId);
+      })
+      .map((pan) => ({
+        panUuid: pan.id,
+        flavourId: item.flavourId,
+        weightKg: allocationByPanId.get(pan.id) ?? 0,
+        notes: "review: multiple active display pans; FIFO allocation applied",
+      }));
+  });
+
+  return {
+    items: inferredItems,
+    panById: new Map([...panById, ...displayPans.map((pan): [string, Pan] => [pan.id, pan])]),
+  };
+}
+
 export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCountWithItems> {
   assertStoreLocation(input, input.locationId);
 
@@ -714,36 +1031,7 @@ export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCou
     listDisplayPans(input.locationId),
     existing ? listEodItems(existing.id) : Promise.resolve([]),
   ]);
-  const displayPanById = new Map(displayPans.map((pan) => [pan.id, pan]));
-  const existingPanIds = new Set(existingItems.map((item) => item.panId).filter((panId): panId is string => Boolean(panId)));
-  const baseItems = input.items.map((item) => ({
-    ...item,
-    panUuid: item.panUuid ?? null,
-    flavourId: item.flavourId ?? null,
-  }));
-  const itemPanUuids = [...new Set(baseItems.map((item) => item.panUuid).filter((panUuid): panUuid is string => Boolean(panUuid)))];
-  const itemPans = await listPansByIds(itemPanUuids);
-  const panById = new Map([...displayPans, ...itemPans].map((pan) => [pan.id, pan]));
-  const activeFlavourIds = new Set((await listFlavours(true)).map((flavour) => flavour.id));
-  const normalizedItems = baseItems.map((item) => ({
-    ...item,
-    flavourId: item.flavourId ?? (item.panUuid ? panById.get(item.panUuid)?.flavourId ?? null : null),
-  }));
-  const hasInvalidPan = normalizedItems.some((item) => {
-    if (!item.panUuid) return false;
-
-    const pan = panById.get(item.panUuid);
-    if (!pan || pan.currentLocationId !== input.locationId) return true;
-
-    return !displayPanById.has(item.panUuid) && !existingPanIds.has(item.panUuid);
-  });
-  if (hasInvalidPan) {
-    throw new Error("End-of-day gelato counts can only include display pans.");
-  }
-  const hasInvalidFlavour = normalizedItems.some((item) => !item.flavourId || !activeFlavourIds.has(item.flavourId));
-  if (hasInvalidFlavour) {
-    throw new Error("End-of-day gelato counts can only include active flavours or display pans.");
-  }
+  const { items: normalizedItems, panById } = await normalizeEodItemsForLifecycle(input, displayPans, existingItems);
 
   const count = existing
     ? await updateEodCount(existing.id, {
@@ -763,7 +1051,7 @@ export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCou
 async function finalizeEodDisplayPans(
   input: EodCountInput,
   countId: string,
-  items: EodCountInput["items"],
+  items: NormalizedEodItem[],
   panById: Map<string, Pan>,
 ) {
   await Promise.all(
@@ -793,6 +1081,8 @@ async function finalizeEodDisplayPans(
           });
           return;
         }
+
+        await assertNoOtherOpenOrPartialPan(input.locationId, pan.flavourId, [pan.id]);
 
         if (pan.status === "returned") {
           const weightDelta = item.weightKg - (pan.currentWeightKg ?? 0);
@@ -867,9 +1157,223 @@ export async function listEmptyPanCountsByStore(locationId?: string): Promise<St
       counts.set(pan.currentLocationId!, (counts.get(pan.currentLocationId!) ?? 0) + 1);
     });
 
+  demoEmptyPanReturns
+    .filter((emptyReturn) => emptyReturn.status !== "cancelled" && (!locationId || emptyReturn.sourceLocationId === locationId))
+    .forEach((emptyReturn) => {
+      counts.set(emptyReturn.sourceLocationId, Math.max(0, (counts.get(emptyReturn.sourceLocationId) ?? 0) - emptyReturn.quantity));
+    });
+
   return [...counts.entries()]
     .map(([countLocationId, emptyPanCount]) => ({ locationId: countLocationId, emptyPanCount }))
     .sort((a, b) => a.locationId.localeCompare(b.locationId));
+}
+
+async function getStoreEmptyPanCount(locationId: string): Promise<number> {
+  return (await listEmptyPanCountsByStore(locationId)).find((count) => count.locationId === locationId)?.emptyPanCount ?? 0;
+}
+
+export async function createEmptyPanReturn(input: EmptyPanReturnInput): Promise<EmptyPanReturn> {
+  assertStoreLocation(input, input.sourceLocationId);
+  assertPositiveWholeQuantity(input.quantity, "Empty pan return quantity");
+
+  const availableEmptyPans = await getStoreEmptyPanCount(input.sourceLocationId);
+  if (input.quantity > availableEmptyPans) {
+    throw new Error("Cannot return more empty pans than the app-calculated store empty-pan count.");
+  }
+
+  if (!isSupabaseConfigured) {
+    const emptyReturn: EmptyPanReturn = {
+      id: makeId("empty-return"),
+      sourceLocationId: input.sourceLocationId,
+      destinationLocationId: "lab",
+      quantity: input.quantity,
+      status: "in_transit",
+      createdBy: input.actorId,
+      sentAt: new Date().toISOString(),
+      receivedBy: null,
+      receivedAt: null,
+      notes: input.notes,
+      resolutionNotes: null,
+    };
+    demoEmptyPanReturns.push(emptyReturn);
+    return emptyReturn;
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("empty_pan_returns")
+    .insert({
+      source_location_id: input.sourceLocationId,
+      destination_location_id: "lab",
+      quantity: input.quantity,
+      status: "in_transit",
+      created_by: input.actorId,
+      notes: input.notes,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapEmptyPanReturn(data);
+}
+
+export async function listEmptyPanReturns(status?: EmptyPanReturnStatus): Promise<EmptyPanReturn[]> {
+  if (!isSupabaseConfigured) {
+    return demoEmptyPanReturns
+      .filter((emptyReturn) => !status || emptyReturn.status === status)
+      .sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+  }
+
+  let query = requireSupabaseClient().from("empty_pan_returns").select("*").order("sent_at", { ascending: false });
+  if (status) {
+    query = query.eq("status", status);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.map(mapEmptyPanReturn);
+}
+
+export async function acceptEmptyPanReturn(input: EmptyPanReturnResolutionInput): Promise<EmptyPanReturn> {
+  assertLabOrAdmin(input);
+  return updateEmptyPanReturnStatus(input, "accepted");
+}
+
+export async function disputeEmptyPanReturn(input: EmptyPanReturnResolutionInput): Promise<EmptyPanReturn> {
+  assertLabOrAdmin(input);
+  return updateEmptyPanReturnStatus(input, "disputed");
+}
+
+async function updateEmptyPanReturnStatus(
+  input: EmptyPanReturnResolutionInput,
+  status: Extract<EmptyPanReturnStatus, "accepted" | "disputed">,
+): Promise<EmptyPanReturn> {
+  if (!isSupabaseConfigured) {
+    const existing = demoEmptyPanReturns.find((emptyReturn) => emptyReturn.id === input.returnId);
+    if (!existing) throw new Error("Empty pan return not found.");
+    if (existing.status !== "in_transit") {
+      throw new Error("Only in-transit empty pan returns can be resolved.");
+    }
+    existing.status = status;
+    existing.receivedBy = input.actorId;
+    existing.receivedAt = new Date().toISOString();
+    existing.resolutionNotes = input.notes;
+    return { ...existing };
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("empty_pan_returns")
+    .update({
+      status,
+      received_by: input.actorId,
+      received_at: new Date().toISOString(),
+      resolution_notes: input.notes,
+    })
+    .eq("id", input.returnId)
+    .eq("status", "in_transit")
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapEmptyPanReturn(data);
+}
+
+export async function submitPhysicalEmptyPanCount(input: EmptyPanPhysicalCountInput): Promise<EmptyPanPhysicalCount> {
+  assertStoreLocation(input, input.locationId);
+  assertNonnegativeWholeQuantity(input.physicalCount, "Physical empty pan count");
+
+  const appCalculatedCount = await getStoreEmptyPanCount(input.locationId);
+  const variance = input.physicalCount - appCalculatedCount;
+  const status: EmptyPanPhysicalCount["status"] = variance === 0 ? "matched" : "flagged";
+
+  if (!isSupabaseConfigured) {
+    const count: EmptyPanPhysicalCount = {
+      id: makeId("empty-physical-count"),
+      locationId: input.locationId,
+      businessDate: input.businessDate,
+      countType: input.countType,
+      physicalCount: input.physicalCount,
+      appCalculatedCount,
+      variance,
+      status,
+      countedBy: input.actorId,
+      countedAt: new Date().toISOString(),
+      resolvedBy: null,
+      resolvedAt: null,
+      notes: input.notes,
+    };
+    demoEmptyPanPhysicalCounts.push(count);
+    return count;
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("physical_empty_pan_counts")
+    .insert({
+      location_id: input.locationId,
+      business_date: input.businessDate,
+      count_type: input.countType,
+      physical_count: input.physicalCount,
+      app_calculated_count: appCalculatedCount,
+      variance,
+      status,
+      counted_by: input.actorId,
+      notes: input.notes,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapEmptyPanPhysicalCount(data);
+}
+
+export async function listPhysicalEmptyPanCounts(locationId?: string): Promise<EmptyPanPhysicalCount[]> {
+  if (!isSupabaseConfigured) {
+    return demoEmptyPanPhysicalCounts
+      .filter((count) => !locationId || count.locationId === locationId)
+      .sort((a, b) => b.countedAt.localeCompare(a.countedAt));
+  }
+
+  let query = requireSupabaseClient()
+    .from("physical_empty_pan_counts")
+    .select("*")
+    .order("counted_at", { ascending: false });
+  if (locationId) {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.map(mapEmptyPanPhysicalCount);
+}
+
+export async function resolvePhysicalEmptyPanCount(input: EmptyPanPhysicalCountResolutionInput): Promise<EmptyPanPhysicalCount> {
+  const existing = (await listPhysicalEmptyPanCounts()).find((count) => count.id === input.countId);
+  if (!existing) {
+    throw new Error("Physical empty pan count not found.");
+  }
+  assertCanResolveStoreReview(input, existing.locationId);
+
+  if (!isSupabaseConfigured) {
+    existing.status = "resolved";
+    existing.resolvedBy = input.actorId;
+    existing.resolvedAt = new Date().toISOString();
+    existing.notes = input.notes ?? existing.notes;
+    return { ...existing };
+  }
+
+  const { data, error } = await requireSupabaseClient()
+    .from("physical_empty_pan_counts")
+    .update({
+      status: "resolved",
+      resolved_by: input.actorId,
+      resolved_at: new Date().toISOString(),
+      notes: input.notes,
+    })
+    .eq("id", input.countId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapEmptyPanPhysicalCount(data);
 }
 
 async function createEodCount(input: EodCountInput): Promise<EodCount> {

@@ -52,12 +52,12 @@ export function EodGelatoCount({
         ]);
         if (!mounted) return;
 
-        const existingWeights = new Map(
-          existing?.items.map((item) => [
-            item.panId ? `pan:${item.panId}` : `flavour:${item.flavourId ?? ""}`,
-            item.weightKg ?? 0,
-          ]) ?? [],
-        );
+        const existingWeightsByFlavour = new Map<string, number>();
+        existing?.items.forEach((item) => {
+          const itemFlavourId = item.flavourId ?? displayPans.find((pan) => pan.id === item.panId)?.flavourId ?? null;
+          if (!itemFlavourId) return;
+          existingWeightsByFlavour.set(itemFlavourId, (existingWeightsByFlavour.get(itemFlavourId) ?? 0) + (item.weightKg ?? 0));
+        });
         const displayFlavourIds = new Set(displayPans.map((pan) => pan.flavourId));
         const relevantFlavourIds = new Set(
           projectedBalances.filter((balance) => balance.currentWeightKg > 0).map((balance) => balance.flavourId),
@@ -65,19 +65,25 @@ export function EodGelatoCount({
         existing?.items.forEach((item) => {
           if (item.flavourId) relevantFlavourIds.add(item.flavourId);
         });
-        const displayEntries = displayPans.map((pan): EodEntry => ({
-          id: `pan:${pan.id}`,
-          panUuid: pan.id,
-          flavourId: pan.flavourId,
-          weightKg: String(existingWeights.get(`pan:${pan.id}`) ?? pan.currentWeightKg ?? ""),
-        }));
+        displayFlavourIds.forEach((flavourId) => relevantFlavourIds.add(flavourId));
+        const displayEntries = [...displayFlavourIds].map((flavourId): EodEntry => {
+          const displayWeightKg = displayPans
+            .filter((pan) => pan.flavourId === flavourId)
+            .reduce((sum, pan) => sum + (pan.currentWeightKg ?? 0), 0);
+          return {
+            id: `display-flavour:${flavourId}`,
+            panUuid: null,
+            flavourId,
+            weightKg: String(existingWeightsByFlavour.get(flavourId) ?? displayWeightKg),
+          };
+        });
         const flavourEntries = [...relevantFlavourIds]
           .filter((flavourId) => !displayFlavourIds.has(flavourId))
           .map((flavourId): EodEntry => ({
             id: `flavour:${flavourId}`,
             panUuid: null,
             flavourId,
-            weightKg: String(existingWeights.get(`flavour:${flavourId}`) ?? 0),
+            weightKg: String(existingWeightsByFlavour.get(flavourId) ?? 0),
           }));
         const flavourName = (flavourId: string | null) => flavourById.get(flavourId ?? "")?.name ?? "";
 
@@ -132,10 +138,10 @@ export function EodGelatoCount({
   }
 
   function getEntryLabel(entry: EodEntry) {
-    const pan = entry.panUuid ? displayPans.find((item) => item.id === entry.panUuid) : null;
+    const displayCount = displayPans.filter((item) => item.flavourId === entry.flavourId).length;
     return {
       name: flavourById.get(entry.flavourId ?? "")?.name ?? "Unknown flavour",
-      detail: pan ? pan.panId : "No display pan recorded",
+      detail: displayCount > 0 ? `${displayCount} display pan${displayCount === 1 ? "" : "s"}` : "No display pan recorded",
     };
   }
 

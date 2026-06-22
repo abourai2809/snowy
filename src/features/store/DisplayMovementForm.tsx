@@ -6,6 +6,8 @@ import type { Flavour } from "../../domain/flavours";
 import type { StoreActor } from "./storeApi";
 import { swapPanToDisplay } from "./storeApi";
 
+type CheckoutMode = "partial" | "empty" | "too_low";
+
 interface DisplayMovementFormProps extends StoreActor {
   locationId: string;
   backupPans: Pan[];
@@ -26,7 +28,7 @@ export function DisplayMovementForm({
 }: DisplayMovementFormProps) {
   const [flavourId, setFlavourId] = useState("");
   const [panUuid, setPanUuid] = useState("");
-  const [checkoutMode, setCheckoutMode] = useState<"partial" | "empty">("partial");
+  const [checkoutMode, setCheckoutMode] = useState<CheckoutMode>("partial");
   const [checkoutWeightKg, setCheckoutWeightKg] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +43,7 @@ export function DisplayMovementForm({
       panUuid &&
       (!currentDisplayPan ||
         checkoutMode === "empty" ||
+        checkoutMode === "too_low" ||
         checkoutWeightKg ||
         currentDisplayPan.currentWeightKg !== null),
   );
@@ -72,7 +75,7 @@ export function DisplayMovementForm({
         storeLocationId: locationId,
         checkoutPanUuid: currentDisplayPan?.id ?? null,
         checkoutWeightKg: currentDisplayPan
-          ? checkoutMode === "empty"
+          ? checkoutMode === "empty" || checkoutMode === "too_low"
             ? 0
             : Number(checkoutWeightKg || (currentDisplayPan.currentWeightKg ?? 0))
           : null,
@@ -114,6 +117,7 @@ export function DisplayMovementForm({
             <option value="">Select deep freezer pan</option>
             {candidatePans.map((pan) => (
               <option value={pan.id} key={pan.id}>
+                {pan.id === candidatePans[0]?.id ? "Recommended FIFO - " : ""}
                 {flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"} - {pan.panId}
                 {isPartialDeepFreezerPan(pan) ? " (partial deep)" : ""}
               </option>
@@ -134,9 +138,10 @@ export function DisplayMovementForm({
             </div>
             <label className="field compact-field">
               <span>Checkout</span>
-              <select value={checkoutMode} onChange={(event) => setCheckoutMode(event.target.value as "partial" | "empty")}>
-                <option value="partial">Partial</option>
+              <select value={checkoutMode} onChange={(event) => setCheckoutMode(event.target.value as CheckoutMode)}>
+                <option value="too_low">Too low, mark empty</option>
                 <option value="empty">Completely empty</option>
+                <option value="partial">Keep as partial</option>
               </select>
             </label>
             {checkoutMode === "partial" ? (
