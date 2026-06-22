@@ -27,75 +27,7 @@ This document is the product reference for the end-to-end journey of a gelato pa
 
 ## Flowchart
 
-```mermaid
-flowchart TD
-  A["Lab records production"] --> B["App creates batch"]
-  B --> C["App creates one pan record per physical pan"]
-  C --> D["App assigns pan ID immediately"]
-  D --> E["Pan enters lab available inventory"]
-
-  E --> F["Lab dispatches selected pans to store"]
-  F --> G["Pan status: in transit"]
-
-  G --> H{"Store receives dispatch"}
-  H -- "Accept" --> I["Pan becomes store deep-freezer stock"]
-  H -- "Reject" --> J["Rejected dispatch item"]
-  J --> K{"Rejected by mistake?"}
-  K -- "Yes, manager or admin overturns" --> I
-  K -- "No" --> L["Needs lab or admin resolution"]
-
-  I --> M["Store chooses flavour for display"]
-  M --> N["App recommends FIFO pan"]
-  N --> O{"Eligible pan available?"}
-  O -- "No" --> P["No move; requirement or restock needed"]
-  O -- "Yes" --> Q{"Existing active display pan for flavour?"}
-
-  Q -- "No" --> R["Move FIFO pan to display"]
-  Q -- "Yes" --> S["Guided swap workflow"]
-
-  S --> T{"Why replace old pan?"}
-  T -- "Old pan empty" --> U["Mark old pan empty/depleted"]
-  T -- "Old pan too low" --> V["Treat old pan as empty/depleted"]
-  T -- "Old pan still usable partial" --> W{"Would this violate one open/partial pan rule?"}
-
-  W -- "Yes" --> X["Block or require admin resolution"]
-  W -- "No" --> Y["Record old pan as the one partial/open pan"]
-
-  U --> Z["Store app-calculated empty-pan count increases"]
-  V --> Z
-  Y --> R
-  Z --> R
-
-  R --> AA["Record display movement event"]
-  AA --> AB["New pan becomes active display pan"]
-
-  AB --> AC{"BOD or EOD physical empty-pan count"}
-  AC --> AD["Staff records physical empty pans in store"]
-  AD --> AE{"Physical count equals app-calculated count?"}
-  AE -- "Yes" --> AF["No discrepancy"]
-  AE -- "No" --> AG["Flag review for store staff, manager, and Admin"]
-
-  AB --> AH["EOD gelato weight by flavour"]
-  AH --> AI{"Active display pan exists?"}
-  AI -- "None" --> AJ["Save flavour count; flag unmatched review"]
-  AI -- "One" --> AK["Assign weight to pan"]
-  AI -- "Multiple" --> AL["Exception only: FIFO allocation and flag review"]
-
-  AK --> AM{"Weight valid?"}
-  AL --> AM
-  AM -- "Over capacity or suspicious" --> AN["Flag correction/review"]
-  AM -- "0 kg" --> AO["Close pan depleted/empty"]
-  AM -- "> 0 kg" --> AP["Return pan to deep freezer as partial/open"]
-
-  AO --> Z
-  AP --> AQ["Still counts as the one open/partial pan for that store and flavour"]
-
-  Z --> AR["Store creates empty-pan return to lab"]
-  AR --> AS["Return is in transit; store empty count decreases"]
-  AS --> AT{"Lab accepts empty pans"}
-  AT -- "Accept" --> AU["Lab records received empty pans"]
-  AT -- "Dispute or reject" --> AV["Return stays open and flagged for correction"]
-```
+The maintained color flowchart is now in [staff-guides/pan-workflow/flowchart.md](staff-guides/pan-workflow/flowchart.md). It shows where Lab Staff, Store Staff, Store Manager, and Admin interact with the pan workflow.
 
 ## Workflow Details
 
