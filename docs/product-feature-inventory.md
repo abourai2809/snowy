@@ -87,6 +87,8 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 
 ## Store Gelato Features
 
+Detailed pan lifecycle rules are documented in [pan-workflow.md](pan-workflow.md).
+
 - Store staff must be checked in to a location before using store workflows.
 - The Store tab is an action hub: it shows store workflow choices and optional reporting, but no editable workflow fields.
 - Store workflow forms open from dedicated action views after staff choose the action.
