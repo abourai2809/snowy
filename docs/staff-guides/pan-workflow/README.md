@@ -2,6 +2,15 @@
 
 These guides show how each staff profile uses the app for gelato pans.
 
+Use these PDF files if the screenshots do not show in Markdown:
+
+- [Lab Staff and Lab Manager PDF](pdf/lab-staff-pan-guide.pdf)
+- [Store Staff PDF](pdf/store-staff-pan-guide.pdf)
+- [Store Manager PDF](pdf/store-manager-pan-guide.pdf)
+- [Admin PDF](pdf/admin-pan-guide.pdf)
+- [Pan workflow flowchart PDF](pdf/pan-workflow-flowchart.pdf)
+- [All staff guides combined PDF](pdf/pan-workflow-staff-guides-combined.pdf)
+
 Use the role guide for your work:
 
 - [Lab Staff and Lab Manager](lab-staff.md)
@@ -21,4 +30,3 @@ The feature flowchart is for owners and managers:
 - **Too low**: very little gelato is left. The app treats this pan as empty.
 - **Empty pan count**: how many empty pans the app thinks are in the store.
 - **Physical count**: how many empty pans staff can see in the store.
-
