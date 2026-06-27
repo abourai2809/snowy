@@ -793,6 +793,15 @@ button {
   text-transform: uppercase;
 }
 
+.badge-warning {
+  background: var(--aml);
+  color: var(--amd);
+}
+
+.store-pan-inventory-table {
+  min-width: 620px;
+}
+
 .selfie-review-grid {
   display: grid;
   gap: 10px;

@@ -21,7 +21,7 @@ describe("ProductionForm", () => {
     await user.click(screen.getByRole("button", { name: "Lab" }));
 
     const flavourSelect = await screen.findByLabelText("Production flavour");
-    const flavourOption = screen.getByRole("option", { name: "PISTACHTO" }) as HTMLOptionElement;
+    const flavourOption = within(flavourSelect).getByRole("option", { name: "PISTACHTO" }) as HTMLOptionElement;
     await user.selectOptions(flavourSelect, flavourOption.value);
     await user.clear(screen.getByLabelText("Production date"));
     await user.type(screen.getByLabelText("Production date"), "2026-05-23");

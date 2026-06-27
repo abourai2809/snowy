@@ -95,9 +95,9 @@ export const APP_ROUTES: readonly AppRoute[] = [
 export const HOME_CARDS: Record<AppRole, readonly string[]> = {
   admin: ["Catalog setup", "Staff roster", "Store reports", "Review"],
   store_manager: ["Incoming pans", "EOD review", "Same-day corrections", "Store supplies"],
-  lab_manager: ["Production batches", "Dispatch queue", "Raw materials", "Lab supplies"],
+  lab_manager: ["Store pan inventory", "Production batches", "Dispatch queue", "Raw materials", "Lab supplies"],
   store_staff: ["Check in", "Incoming pans", "Move to display", "EOD display count"],
-  lab_staff: ["Check in", "Production entry", "Dispatch pans", "Lab supplies"],
+  lab_staff: ["Check in", "Store pan inventory", "Production entry", "Dispatch pans", "Lab supplies"],
 };
 
 export const HOME_CARD_ROUTES: Record<AppRole, Record<string, RouteId>> = {
@@ -114,6 +114,7 @@ export const HOME_CARD_ROUTES: Record<AppRole, Record<string, RouteId>> = {
     "Store supplies": "store",
   },
   lab_manager: {
+    "Store pan inventory": "lab",
     "Production batches": "lab",
     "Dispatch queue": "lab",
     "Raw materials": "lab",
@@ -127,6 +128,7 @@ export const HOME_CARD_ROUTES: Record<AppRole, Record<string, RouteId>> = {
   },
   lab_staff: {
     "Check in": "attendance",
+    "Store pan inventory": "lab",
     "Production entry": "lab",
     "Dispatch pans": "lab",
     "Lab supplies": "lab",
@@ -136,9 +138,9 @@ export const HOME_CARD_ROUTES: Record<AppRole, Record<string, RouteId>> = {
 export const OPERATION_CARDS: Record<RouteId, readonly string[]> = {
   dashboard: [],
   attendance: ["Check in", "Check out", "My history", "Weekly off"],
-  lab: ["Production", "Dispatch", "Raw materials", "Lab supplies"],
+  lab: ["Store pan inventory", "Production", "Dispatch", "Raw materials", "Lab supplies"],
   store: ["Incoming pans", "Backup freezer", "Move to display", "End of day"],
-  stores: ["Rajpur Road", "Malsi", "Mussoorie", "All stores"],
+  stores: ["Pan inventory", "Rajpur Road", "Malsi", "Mussoorie", "All stores"],
   review: ["Attendance selfies", "Attendance sheet", "Store reports", "Lab requirements"],
   catalog: ["Flavours", "Products", "Store supplies", "Lab supplies", "Raw materials", "Packaging"],
   staff: ["Staff roster", "Holiday allowance", "Bonus days", "Inactive staff"],

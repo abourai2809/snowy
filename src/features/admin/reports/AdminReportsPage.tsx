@@ -9,6 +9,7 @@ import { listAttendanceForDate, listSelfieChecksForAttendanceIds } from "../../a
 import { listInventoryCounts } from "../../inventory/inventoryApi";
 import { listLabDispatches } from "../../lab/labApi";
 import { listDeepFreezerCounts, MORNING_VERIFICATION_TOLERANCE_KG } from "../../store/deepFreezerApi";
+import { StorePanInventorySummary } from "../../store/StorePanInventorySummary";
 import {
   listEmptyPanCountsByStore,
   listEmptyPanReturns,
@@ -102,6 +103,8 @@ export function AdminReportsPage() {
           ))}
         </div>
       </section>
+
+      <StorePanInventorySummary />
 
       <section className="card">
         <div className="card-title">EOD gelato</div>

@@ -28,7 +28,8 @@ describe("CatalogPage", () => {
     expect(await screen.findByText("Blueberry Basil")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Lab" }));
-    expect(await screen.findByText("Blueberry Basil")).toBeInTheDocument();
+    const productionFlavourSelect = await screen.findByLabelText("Production flavour");
+    expect(within(productionFlavourSelect).getByRole("option", { name: "Blueberry Basil" })).toBeInTheDocument();
   });
 
   it("adds a store supply and shows it in the Store supply checklist", async () => {

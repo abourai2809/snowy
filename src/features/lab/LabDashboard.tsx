@@ -5,6 +5,7 @@ import type { Pan } from "../../domain/pans";
 import { listFlavours } from "../catalog/catalogApi";
 import { useAuth } from "../auth/AuthProvider";
 import { InventoryCountPage } from "../inventory/InventoryCountPage";
+import { StorePanInventorySummary } from "../store/StorePanInventorySummary";
 import { UrgentRequirementsPanel } from "../urgentRequirements/UrgentRequirementsPanel";
 import { DispatchForm } from "./DispatchForm";
 import { EmptyPanReturnsPanel } from "./EmptyPanReturnsPanel";
@@ -44,6 +45,7 @@ export function LabDashboard() {
   return (
     <div className="page-stack">
       <UrgentRequirementsPanel profile={profile} locationId={profile.defaultLocationId} title="Urgent store needs" />
+      <StorePanInventorySummary />
       <ProductionForm flavours={flavours} profile={profile} onCreated={refresh} />
       <PanList pans={pans} flavours={flavours} />
       <DispatchForm pans={availablePans} flavours={flavours} profile={profile} onDispatched={refresh} />

@@ -41,6 +41,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - Toggle location-based attendance enforcement. Default is on.
 - View operational reports:
   - recent dispatches,
+  - store pan inventory by store/flavour with new backup and open/partial pan counts,
   - EOD gelato counts,
   - morning freezer checks,
   - supply counts,
@@ -81,11 +82,13 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - Store batch ID separately from pan ID.
 - Add produced pans to lab inventory first.
 - Show available lab inventory.
+- Show store pan inventory by store/flavour with filters for store, flavour, and low new-backup pan count.
 - Move selected available lab inventory to a store through dispatch.
 - Dispatch changes selected pans to in transit and removes them from available lab stock.
 - Lab inventory and dispatch are separate workflows.
 - Lab can accept or dispute empty-pan returns sent back by stores.
 - Lab can see store requirements derived from store target weights and projected deep-freezer balances.
+- End-of-day low-backup-pan alerts are deferred and tracked in issue #54.
 
 ## Store Gelato Features
 
