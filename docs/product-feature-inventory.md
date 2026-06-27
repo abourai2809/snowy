@@ -37,7 +37,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
   - set salary type and salary amount used by salary calculation,
   - set allowed holidays,
   - add bonus days,
-  - reset/manage staff app password.
+  - reset/manage approved non-Admin staff app passwords through a backend-only Admin action.
 - Toggle location-based attendance enforcement. Default is on.
 - View operational reports:
   - recent dispatches,
@@ -69,8 +69,11 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 - The active checked-in location is shown in the app header and drives store-specific workflows.
 - Location verification can be enforced or disabled by Admin.
 - Attendance stores check-in/out timestamps, location, and verification metadata where available.
-- Attendance review defaults to today, supports date ranges, and shows running hours for staff still checked in today.
+- Attendance review defaults to today, supports date ranges and month selection, and shows running hours for staff still checked in today.
+- Attendance review generates one row per active approved staff member per day in the selected range, including staff with no attendance entry.
 - Attendance review groups salary rows by staff default location, not by the store actually worked during a shift.
+- Attendance review classifies each staff/day as full day, half day, day off, absent, or needs review; no-attendance days are allocated to allowed/bonus holidays before becoming absent.
+- Attendance review also shows the locations actually worked during that day for store-switching cases.
 - Admin can manually adjust reviewed hours for a staff/day after a confirmation warning; these adjustments affect the current review and salary PDF.
 - Admin can generate a salary calculation PDF from the attendance review. Monthly salary staff are paid full salary after calendar days minus four required worked days, plus extra days at monthly salary divided by calendar days.
 

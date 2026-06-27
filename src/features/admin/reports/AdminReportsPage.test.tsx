@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../../app/App";
-import { getDemoStaffByRole, resetDemoStaffData } from "../staff/staffApi";
+import { getDemoStaffByRole, resetDemoStaffData, updateHolidaySettings } from "../staff/staffApi";
 import { checkIn, checkOut, resetDemoAttendanceData } from "../../attendance/attendanceApi";
 import { listFlavours, resetDemoCatalogData } from "../../catalog/catalogApi";
 import { resetDemoInventoryData } from "../../inventory/inventoryApi";
@@ -67,11 +67,12 @@ describe("AdminReportsPage", () => {
     expect(screen.getByRole("button", { name: "Calculate salary" })).toBeInTheDocument();
 
     const table = screen.getByRole("table", { name: "Attendance review" });
-    expect(within(table).getAllByRole("row")).toHaveLength(2);
-    expect(within(table).getByText("Malsi")).toBeInTheDocument();
-    expect(within(table).queryByText("Rajpur Road")).not.toBeInTheDocument();
-    expect(within(table).queryByText("Mussoorie")).not.toBeInTheDocument();
-    expect(screen.getByText("Full day")).toBeInTheDocument();
+    expect(within(table).getAllByRole("row").length).toBeGreaterThan(1);
+    const staffReviewRow = within(table).getByText(storeStaff.name).closest("tr");
+    expect(staffReviewRow).toBeTruthy();
+    expect(within(staffReviewRow as HTMLElement).getByText("Malsi")).toBeInTheDocument();
+    expect(within(staffReviewRow as HTMLElement).getByText("Rajpur Road, Mussoorie")).toBeInTheDocument();
+    expect(within(staffReviewRow as HTMLElement).getByText("Full day")).toBeInTheDocument();
     expect(screen.getByText("Attendance selfie review")).toBeInTheDocument();
 
     vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -93,7 +94,36 @@ describe("AdminReportsPage", () => {
     fireEvent.change(screen.getByLabelText("Attendance start date"), { target: { value: "2026-05-20" } });
     fireEvent.change(screen.getByLabelText("Attendance end date"), { target: { value: "2026-05-20" } });
 
-    expect(await screen.findByText("No attendance entries match this date range and filter.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("Absent").length).toBeGreaterThan(0));
+  });
+
+  it("shows day off and absent rows for active staff without attendance", async () => {
+    const user = userEvent.setup();
+    const storeStaff = getDemoStaffByRole("store_staff");
+    await updateHolidaySettings(
+      storeStaff.id,
+      1,
+      0,
+      storeStaff.requiredHoursPerDay,
+      storeStaff.defaultLocationId,
+      storeStaff.salaryAmount,
+      storeStaff.salaryType,
+    );
+
+    renderApp(<App initialRole="admin" />);
+    await user.click(screen.getAllByRole("button", { name: "Review" }).at(-1) as HTMLElement);
+
+    await screen.findByText("Attendance review");
+    await user.selectOptions(screen.getByLabelText("Filter employee"), storeStaff.id);
+    fireEvent.change(screen.getByLabelText("Attendance start date"), { target: { value: "2026-05-20" } });
+    fireEvent.change(screen.getByLabelText("Attendance end date"), { target: { value: "2026-05-21" } });
+
+    await waitFor(() => {
+      const table = screen.getByRole("table", { name: "Attendance review" });
+      expect(within(table).getAllByRole("row")).toHaveLength(3);
+    });
+    expect(screen.getAllByText("Day off").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Absent").length).toBeGreaterThan(0);
   });
 
   it("shows running hours for staff who are still checked in today", async () => {
@@ -111,9 +141,8 @@ describe("AdminReportsPage", () => {
     const table = await screen.findByRole("table", { name: "Attendance review" });
     const staffRow = within(table).getByText(storeStaff.name).closest("tr");
     expect(staffRow).toBeTruthy();
-    expect(within(staffRow as HTMLElement).getByText("Open")).toBeInTheDocument();
     expect(within(staffRow as HTMLElement).getByText("Open shift")).toBeInTheDocument();
-    expect(within(staffRow as HTMLElement).getByText("Running")).toBeInTheDocument();
+    expect(within(staffRow as HTMLElement).getByText("Needs review")).toBeInTheDocument();
     expect(within(staffRow as HTMLElement).getByText(expectedHoursText)).toBeInTheDocument();
   });
 

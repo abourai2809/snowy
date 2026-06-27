@@ -13,9 +13,7 @@ import {
 } from "../../attendance/attendanceApi";
 import { listLocations, listStaff } from "../staff/staffApi";
 
-function currentDate(): string {
-  return getTodayKey();
-}
+type AttendanceCredit = "Full day" | "Half day" | "Absent" | "Day off" | "Needs review";
 
 interface AttendanceReviewRow {
   id: string;
@@ -24,8 +22,9 @@ interface AttendanceReviewRow {
   staffName: string;
   locationId: string | null;
   locationName: string;
+  workedLocationNames: string;
   shiftCount: number;
-  firstCheckInAt: string;
+  firstCheckInAt: string | null;
   lastCheckOutAt: string | null;
   totalHours: number;
   requiredHours: number;
@@ -34,13 +33,22 @@ interface AttendanceReviewRow {
   selfiePendingCount: number;
   selfieNeedsReviewCount: number;
   selfieMissingCount: number;
-  credit: string;
+  credit: AttendanceCredit;
   manualHours: boolean;
+}
+
+function currentDate(): string {
+  return getTodayKey();
+}
+
+function currentMonth(): string {
+  return currentDate().slice(0, 7);
 }
 
 export function AttendanceSheetReviewPanel() {
   const [startDate, setStartDate] = useState(currentDate);
   const [endDate, setEndDate] = useState(currentDate);
+  const [reviewMonth, setReviewMonth] = useState(currentMonth);
   const [staffFilter, setStaffFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [attendanceEntries, setAttendanceEntries] = useState<AttendanceEntry[]>([]);
@@ -79,16 +87,12 @@ export function AttendanceSheetReviewPanel() {
     });
   }, [dateRange.endDate, dateRange.startDate]);
 
-  const staffById = new Map(staff.map((item) => [item.id, item]));
   const locationById = new Map(locations.map((location) => [location.id, location]));
   const selfieCheckByEntryId = new Map(selfieChecks.map((check) => [check.attendanceEntryId, check]));
-  const attendanceReviewRows = applyManualHourOverrides(buildAttendanceReviewRows(
-    attendanceEntries,
-    selfieCheckByEntryId,
-    staffById,
-    locationById,
-    now,
-  ), manualHoursByRowId).filter((row) => {
+  const attendanceReviewRows = applyManualHourOverrides(
+    buildAttendanceReviewRows(attendanceEntries, selfieCheckByEntryId, staff, locationById, now, dateRange),
+    manualHoursByRowId,
+  ).filter((row) => {
     if (staffFilter && row.userId !== staffFilter) return false;
     if (locationFilter && row.locationId !== locationFilter) return false;
     return true;
@@ -108,6 +112,24 @@ export function AttendanceSheetReviewPanel() {
     if (confirmed) {
       setManualHoursEnabled(true);
     }
+  }
+
+  function updateReviewMonth(month: string) {
+    if (!month) return;
+    const range = monthDateRange(month);
+    setReviewMonth(month);
+    setStartDate(range.startDate);
+    setEndDate(range.endDate);
+  }
+
+  function updateReviewDate(kind: "start" | "end", value: string) {
+    const nextDate = value || currentDate();
+    if (kind === "start") {
+      setStartDate(nextDate);
+    } else {
+      setEndDate(nextDate);
+    }
+    setReviewMonth(nextDate.slice(0, 7));
   }
 
   function updateManualHours(row: AttendanceReviewRow, value: string) {
@@ -137,12 +159,21 @@ export function AttendanceSheetReviewPanel() {
       {error ? <div className="alert alert-danger">{error}</div> : null}
       <div className="review-controls">
         <label className="field compact-field">
+          <span>Month</span>
+          <input
+            aria-label="Attendance month"
+            type="month"
+            value={reviewMonth}
+            onChange={(event) => updateReviewMonth(event.target.value)}
+          />
+        </label>
+        <label className="field compact-field">
           <span>Start date</span>
           <input
             aria-label="Attendance start date"
             type="date"
             value={startDate}
-            onChange={(event) => setStartDate(event.target.value || currentDate())}
+            onChange={(event) => updateReviewDate("start", event.target.value)}
           />
         </label>
         <label className="field compact-field">
@@ -151,7 +182,7 @@ export function AttendanceSheetReviewPanel() {
             aria-label="Attendance end date"
             type="date"
             value={endDate}
-            onChange={(event) => setEndDate(event.target.value || currentDate())}
+            onChange={(event) => updateReviewDate("end", event.target.value)}
           />
         </label>
         <label className="field compact-field">
@@ -217,63 +248,78 @@ export function AttendanceSheetReviewPanel() {
 function buildAttendanceReviewRows(
   entries: AttendanceEntry[],
   selfieCheckByEntryId: Map<string, AttendanceSelfieCheck>,
-  staffById: Map<string, StaffProfile>,
+  staffRows: StaffProfile[],
   locationById: Map<string, LocationOption>,
   now: Date,
+  dateRange: { startDate: string; endDate: string },
 ): AttendanceReviewRow[] {
   const rows = new Map<string, AttendanceReviewRow>();
   const today = getTodayKey(now);
+  const entriesByUserDate = new Map<string, AttendanceEntry[]>();
 
   for (const entry of entries) {
-    const staff = staffById.get(entry.userId);
-    const reviewLocationId = staff?.defaultLocationId ?? null;
-    const location = reviewLocationId ? locationById.get(reviewLocationId) : undefined;
     const key = `${entry.workDate}|${entry.userId}`;
-    const requiredHours = staff?.requiredHoursPerDay ?? 8;
-    const existing = rows.get(key) ?? {
-      id: key,
-      date: entry.workDate,
-      userId: entry.userId,
-      staffName: staff?.name ?? entry.userId,
-      locationId: reviewLocationId,
-      locationName: location?.name ?? reviewLocationId ?? "No default",
-      shiftCount: 0,
-      firstCheckInAt: entry.checkInAt,
-      lastCheckOutAt: null,
-      totalHours: 0,
-      requiredHours,
-      openShiftCount: 0,
-      selfiePassCount: 0,
-      selfiePendingCount: 0,
-      selfieNeedsReviewCount: 0,
-      selfieMissingCount: 0,
-      credit: "No hours",
-      manualHours: false,
-    };
-
-    existing.shiftCount += 1;
-    if (new Date(entry.checkInAt).getTime() < new Date(existing.firstCheckInAt).getTime()) {
-      existing.firstCheckInAt = entry.checkInAt;
-    }
-
-    if (entry.checkOutAt) {
-      existing.totalHours += entry.hours ?? calculateHours(entry.checkInAt, entry.checkOutAt);
-      if (!existing.lastCheckOutAt || new Date(entry.checkOutAt).getTime() > new Date(existing.lastCheckOutAt).getTime()) {
-        existing.lastCheckOutAt = entry.checkOutAt;
-      }
-    } else {
-      existing.openShiftCount += 1;
-      if (entry.workDate === today) {
-        existing.totalHours += calculateHours(entry.checkInAt, now.toISOString());
-      }
-    }
-
-    applySelfieStatus(existing, entry, selfieCheckByEntryId.get(entry.id));
-    existing.credit = classifyAttendanceCredit(existing.totalHours, existing.requiredHours, existing.openShiftCount);
-    rows.set(key, existing);
+    const existing = entriesByUserDate.get(key) ?? [];
+    existing.push(entry);
+    entriesByUserDate.set(key, existing);
   }
 
-  return [...rows.values()].sort((a, b) => {
+  const activeStaff = staffRows.filter((member) => member.active && member.signupStatus === "approved");
+  for (const staff of activeStaff) {
+    const reviewLocationId = staff.defaultLocationId ?? null;
+    const location = reviewLocationId ? locationById.get(reviewLocationId) : undefined;
+
+    for (const date of datesInRange(dateRange.startDate, dateRange.endDate)) {
+      const key = `${date}|${staff.id}`;
+      const dayEntries = [...(entriesByUserDate.get(key) ?? [])].sort((a, b) =>
+        new Date(a.checkInAt).getTime() - new Date(b.checkInAt).getTime(),
+      );
+      const row: AttendanceReviewRow = {
+        id: key,
+        date,
+        userId: staff.id,
+        staffName: staff.name,
+        locationId: reviewLocationId,
+        locationName: location?.name ?? reviewLocationId ?? "No default",
+        workedLocationNames: formatWorkedLocations(dayEntries, locationById),
+        shiftCount: 0,
+        firstCheckInAt: dayEntries[0]?.checkInAt ?? null,
+        lastCheckOutAt: null,
+        totalHours: 0,
+        requiredHours: staff.requiredHoursPerDay,
+        openShiftCount: 0,
+        selfiePassCount: 0,
+        selfiePendingCount: 0,
+        selfieNeedsReviewCount: 0,
+        selfieMissingCount: 0,
+        credit: "Absent",
+        manualHours: false,
+      };
+
+      for (const entry of dayEntries) {
+        row.shiftCount += 1;
+
+        if (entry.checkOutAt) {
+          row.totalHours += entry.hours ?? calculateHours(entry.checkInAt, entry.checkOutAt);
+          if (!row.lastCheckOutAt || new Date(entry.checkOutAt).getTime() > new Date(row.lastCheckOutAt).getTime()) {
+            row.lastCheckOutAt = entry.checkOutAt;
+          }
+        } else {
+          row.openShiftCount += 1;
+          if (entry.workDate === today) {
+            row.totalHours += calculateHours(entry.checkInAt, now.toISOString());
+          }
+        }
+
+        applySelfieStatus(row, entry, selfieCheckByEntryId.get(entry.id));
+      }
+
+      row.credit = classifyAttendanceCredit(row.totalHours, row.requiredHours, row.openShiftCount);
+      rows.set(key, row);
+    }
+  }
+
+  return applyDayOffPolicy([...rows.values()], activeStaff).sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
     if (a.staffName !== b.staffName) return a.staffName.localeCompare(b.staffName);
     return a.locationName.localeCompare(b.locationName);
@@ -303,12 +349,40 @@ function applySelfieStatus(
   row.selfiePassCount += 1;
 }
 
-function classifyAttendanceCredit(totalHours: number, requiredHours: number, openShiftCount: number): string {
-  if (openShiftCount > 0) return "Open shift";
+function classifyAttendanceCredit(totalHours: number, requiredHours: number, openShiftCount: number): AttendanceCredit {
+  if (openShiftCount > 0) return "Needs review";
   if (totalHours >= requiredHours) return "Full day";
   if (totalHours >= requiredHours / 2) return "Half day";
-  if (totalHours > 0) return "Short day";
-  return "No hours";
+  if (totalHours > 0) return "Needs review";
+  return "Absent";
+}
+
+function applyDayOffPolicy(rows: AttendanceReviewRow[], staffRows: StaffProfile[]): AttendanceReviewRow[] {
+  const staffById = new Map(staffRows.map((staff): [string, StaffProfile] => [staff.id, staff]));
+  const remainingDayOffsByUserId = new Map<string, number>();
+
+  staffRows.forEach((staff) => {
+    remainingDayOffsByUserId.set(staff.id, Math.max(0, Math.floor(staff.allowedHolidaysPerMonth + staff.bonusDaysBalance)));
+  });
+
+  return rows
+    .sort((a, b) => {
+      if (a.userId !== b.userId) return a.userId.localeCompare(b.userId);
+      return a.date.localeCompare(b.date);
+    })
+    .map((row) => {
+      if (row.credit !== "Absent" || row.shiftCount > 0 || !staffById.has(row.userId)) {
+        return row;
+      }
+
+      const remaining = remainingDayOffsByUserId.get(row.userId) ?? 0;
+      if (remaining <= 0) {
+        return row;
+      }
+
+      remainingDayOffsByUserId.set(row.userId, remaining - 1);
+      return { ...row, credit: "Day off" };
+    });
 }
 
 function applyManualHourOverrides(
@@ -354,7 +428,7 @@ function buildSalaryCalculationRows(
   }
 
   return staff
-    .filter((member) => member.active)
+    .filter((member) => member.active && member.signupStatus === "approved")
     .filter((member) => !options.staffFilter || member.id === options.staffFilter)
     .filter((member) => !options.locationFilter || member.defaultLocationId === options.locationFilter)
     .map((member) => {
@@ -387,6 +461,53 @@ function normalizeDateRange(startDate: string, endDate: string): { startDate: st
   return startDate <= endDate ? { startDate, endDate } : { startDate: endDate, endDate: startDate };
 }
 
+function monthDateRange(month: string): { startDate: string; endDate: string } {
+  const [yearText, monthText] = month.split("-");
+  const year = Number(yearText);
+  const monthIndex = Number(monthText);
+  const lastDay = new Date(year, monthIndex, 0).getDate();
+  const startDate = `${month}-01`;
+  const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+  const today = currentDate();
+  return {
+    startDate,
+    endDate: month === today.slice(0, 7) && today < monthEnd ? today : monthEnd,
+  };
+}
+
+function datesInRange(startDate: string, endDate: string): string[] {
+  const dates: string[] = [];
+  const cursor = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+
+  while (cursor.getTime() <= end.getTime()) {
+    dates.push(dateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dates;
+}
+
+function dateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatWorkedLocations(entries: AttendanceEntry[], locationById: Map<string, LocationOption>): string {
+  const names = [
+    ...new Set(
+      entries.map((entry) => {
+        if (!entry.locationId) return "No location";
+        return locationById.get(entry.locationId)?.name ?? entry.locationId;
+      }),
+    ),
+  ];
+
+  return names.length === 0 ? "-" : names.join(", ");
+}
+
 function buildCsvHref(rows: AttendanceReviewRow[]): string {
   return `data:text/csv;charset=utf-8,${encodeURIComponent(buildAttendanceCsv(rows))}`;
 }
@@ -396,6 +517,7 @@ function buildAttendanceCsv(rows: AttendanceReviewRow[]): string {
     "Date",
     "Employee",
     "Review location",
+    "Worked at",
     "Shifts",
     "First check-in",
     "Last checkout",
@@ -407,9 +529,10 @@ function buildAttendanceCsv(rows: AttendanceReviewRow[]): string {
     row.date,
     row.staffName,
     row.locationName,
+    row.workedLocationNames,
     String(row.shiftCount),
-    formatTime(row.firstCheckInAt),
-    row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "Open",
+    row.firstCheckInAt ? formatTime(row.firstCheckInAt) : "-",
+    row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "-",
     formatHours(row.totalHours),
     row.credit,
     formatReviewSelfieStatus(row),
@@ -451,9 +574,10 @@ function buildAttendancePrintHtml(rows: AttendanceReviewRow[], startDate: string
         <td>${escapeHtml(row.date)}</td>
         <td>${escapeHtml(row.staffName)}</td>
         <td>${escapeHtml(row.locationName)}</td>
+        <td>${escapeHtml(row.workedLocationNames)}</td>
         <td>${row.shiftCount}</td>
-        <td>${escapeHtml(formatTime(row.firstCheckInAt))}</td>
-        <td>${escapeHtml(row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "Open")}</td>
+        <td>${escapeHtml(row.firstCheckInAt ? formatTime(row.firstCheckInAt) : "-")}</td>
+        <td>${escapeHtml(row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "-")}</td>
         <td>${escapeHtml(formatHours(row.totalHours))}</td>
         <td>${escapeHtml(row.credit)}</td>
         <td>${escapeHtml(formatReviewSelfieStatus(row))}</td>
@@ -482,6 +606,7 @@ function buildAttendancePrintHtml(rows: AttendanceReviewRow[], startDate: string
           <th>Date</th>
           <th>Employee</th>
           <th>Review location</th>
+          <th>Worked at</th>
           <th>Shifts</th>
           <th>First check-in</th>
           <th>Last checkout</th>
@@ -567,7 +692,9 @@ function AttendanceReviewSummary({ rows }: { rows: AttendanceReviewRow[] }) {
   const totalHours = rows.reduce((total, row) => total + row.totalHours, 0);
   const fullDays = rows.filter((row) => row.credit === "Full day").length;
   const halfDays = rows.filter((row) => row.credit === "Half day").length;
-  const openShifts = rows.reduce((total, row) => total + row.openShiftCount, 0);
+  const dayOffs = rows.filter((row) => row.credit === "Day off").length;
+  const absentDays = rows.filter((row) => row.credit === "Absent").length;
+  const needsReview = rows.filter((row) => row.credit === "Needs review").length;
 
   return (
     <div className="attendance-review-summary">
@@ -588,8 +715,16 @@ function AttendanceReviewSummary({ rows }: { rows: AttendanceReviewRow[] }) {
         <strong>{halfDays}</strong>
       </div>
       <div>
-        <span>Open</span>
-        <strong>{openShifts}</strong>
+        <span>Day off</span>
+        <strong>{dayOffs}</strong>
+      </div>
+      <div>
+        <span>Absent</span>
+        <strong>{absentDays}</strong>
+      </div>
+      <div>
+        <span>Review</span>
+        <strong>{needsReview}</strong>
       </div>
     </div>
   );
@@ -607,7 +742,7 @@ function AttendanceReviewTable({
   onManualHoursChange: (row: AttendanceReviewRow, value: string) => void;
 }) {
   if (rows.length === 0) {
-    return <p className="muted-copy">No attendance entries match this date range and filter.</p>;
+    return <p className="muted-copy">No attendance review rows match this date range and filter.</p>;
   }
 
   return (
@@ -618,6 +753,7 @@ function AttendanceReviewTable({
             <th>Date</th>
             <th>Employee</th>
             <th>Location</th>
+            <th>Worked at</th>
             <th>Shifts</th>
             <th>In</th>
             <th>Out</th>
@@ -635,9 +771,10 @@ function AttendanceReviewTable({
                 <small>{row.requiredHours}h required</small>
               </td>
               <td>{row.locationName}</td>
+              <td>{row.workedLocationNames}</td>
               <td>{row.shiftCount}</td>
-              <td>{formatTime(row.firstCheckInAt)}</td>
-              <td>{row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "Open"}</td>
+              <td>{row.firstCheckInAt ? formatTime(row.firstCheckInAt) : "-"}</td>
+              <td>{row.lastCheckOutAt ? formatTime(row.lastCheckOutAt) : "-"}</td>
               <td>
                 {manualHoursEnabled ? (
                   <label className="manual-hours-field">
@@ -655,7 +792,7 @@ function AttendanceReviewTable({
                 ) : (
                   formatHours(row.totalHours)
                 )}
-                {row.openShiftCount > 0 ? <small>Running</small> : null}
+                {row.openShiftCount > 0 ? <small>Open shift</small> : null}
                 {row.manualHours ? <small>Manual</small> : null}
               </td>
               <td>

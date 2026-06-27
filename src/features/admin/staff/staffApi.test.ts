@@ -105,4 +105,61 @@ describe("staffApi Supabase signup", () => {
       }),
     ).rejects.toThrow("A staff login already exists for this phone.");
   });
+
+  it("resets staff passwords through the server endpoint with the Admin session token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          staff: {
+            id: "staff-1",
+            authUserId: "auth-1",
+            name: "Counter Staff",
+            phone: "9000004444",
+            role: "store_staff",
+            defaultLocationId: "rajpur",
+            salaryAmount: null,
+            salaryType: "daily",
+            requiredHoursPerDay: 8,
+            allowedHolidaysPerMonth: 0,
+            bonusDaysBalance: 0,
+            active: true,
+            signupStatus: "approved",
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const getSession = vi.fn().mockResolvedValue({
+      data: { session: { access_token: "admin-token" } },
+      error: null,
+    });
+    vi.doMock("../../../lib/supabase", () => ({
+      isSupabaseConfigured: true,
+      requireSupabaseClient: vi.fn(() => ({ auth: { getSession } })),
+    }));
+
+    const { resetStaffPassword } = await import("./staffApi");
+
+    await expect(resetStaffPassword("staff-1", "newpass1")).resolves.toMatchObject({
+      id: "staff-1",
+      active: true,
+      signupStatus: "approved",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/staff-password-reset", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer admin-token",
+      },
+      body: JSON.stringify({ staffId: "staff-1", password: "newpass1" }),
+    });
+  });
 });

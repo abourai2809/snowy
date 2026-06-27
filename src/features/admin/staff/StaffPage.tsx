@@ -6,6 +6,7 @@ import {
   listLocations,
   listStaff,
   rejectStaffSignup,
+  resetStaffPassword,
   saveStaff,
   setStaffActive,
   updateHolidaySettings,
@@ -35,6 +36,8 @@ export function StaffPage() {
   const [settings, setSettings] = useState<OperationsSettings | null>(null);
   const [locationCheckInRequired, setLocationCheckInRequired] = useState(true);
   const [form, setForm] = useState<StaffInput>(emptyForm);
+  const [passwordResetByStaffId, setPasswordResetByStaffId] = useState<Record<string, string>>({});
+  const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,6 +142,26 @@ export function StaffPage() {
     } catch (rejectionError) {
       setError(rejectionError instanceof Error ? rejectionError.message : "Unable to reject signup.");
     }
+  }
+
+  async function handlePasswordReset(member: StaffProfile) {
+    const password = passwordResetByStaffId[member.id] ?? "";
+    setResettingPasswordId(member.id);
+    try {
+      await resetStaffPassword(member.id, password);
+      setPasswordResetByStaffId((current) => ({ ...current, [member.id]: "" }));
+      setMessage(`Password reset for ${member.name}.`);
+      setError(null);
+      await refresh();
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "Unable to reset password.");
+    } finally {
+      setResettingPasswordId(null);
+    }
+  }
+
+  function updatePasswordReset(memberId: string, password: string) {
+    setPasswordResetByStaffId((current) => ({ ...current, [memberId]: password }));
   }
 
   function locationName(locationId: string | null) {
@@ -422,6 +445,28 @@ export function StaffPage() {
               <button className="secondary-button" type="button" onClick={() => handleHolidaySave(member)}>
                 Save staff settings
               </button>
+              {member.role !== "admin" && member.signupStatus === "approved" ? (
+                <div className="compact-grid">
+                  <label className="field">
+                    <span>New password</span>
+                    <input
+                      aria-label={`New password ${member.name}`}
+                      type="password"
+                      autoComplete="new-password"
+                      value={passwordResetByStaffId[member.id] ?? ""}
+                      onChange={(event) => updatePasswordReset(member.id, event.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={resettingPasswordId === member.id || (passwordResetByStaffId[member.id] ?? "").length < 6}
+                    onClick={() => void handlePasswordReset(member)}
+                  >
+                    Reset password
+                  </button>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

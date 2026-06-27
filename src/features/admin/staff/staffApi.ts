@@ -562,6 +562,54 @@ export async function rejectStaffSignup(staffId: string): Promise<void> {
   }
 }
 
+export async function resetStaffPassword(staffId: string, password: string): Promise<StaffProfile> {
+  if (password.length < 6) {
+    throw new Error("Password must be at least 6 characters.");
+  }
+
+  if (!isSupabaseConfigured) {
+    const existing = demoStaff.find((staff) => staff.id === staffId);
+    if (!existing) {
+      throw new Error("Staff member not found.");
+    }
+    if (existing.role === "admin") {
+      throw new Error("Admin passwords must be reset outside the staff roster.");
+    }
+    if (existing.signupStatus !== "approved") {
+      throw new Error("Only approved staff can receive an Admin password reset.");
+    }
+
+    existing.password = password;
+    return stripPassword(existing);
+  }
+
+  const { data, error } = await requireSupabaseClient().auth.getSession();
+  if (error) {
+    throw error;
+  }
+
+  const token = data.session?.access_token;
+  if (!token) {
+    throw new Error("Admin login is required to reset staff passwords.");
+  }
+
+  const response = await fetch("/api/staff-password-reset", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ staffId, password }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as { staff?: StaffProfile; error?: string } | null;
+  if (!response.ok || !payload?.staff) {
+    throw new Error(payload?.error ?? "Unable to reset staff password.");
+  }
+
+  return payload.staff;
+}
+
 export async function updateHolidaySettings(
   staffId: string,
   allowedHolidaysPerMonth: number,

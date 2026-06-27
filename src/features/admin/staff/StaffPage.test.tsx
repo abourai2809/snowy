@@ -110,4 +110,48 @@ describe("StaffPage", () => {
       signupStatus: "approved",
     });
   });
+
+  it("lets Admin reset an approved staff password", async () => {
+    const user = userEvent.setup();
+
+    renderApp(<App initialRole="admin" />);
+    await user.click(screen.getByRole("button", { name: "Staff" }));
+
+    const staffRowText = await screen.findByText("Sneha Joshi");
+    const staffRow = staffRowText.closest("article");
+    expect(staffRow).not.toBeNull();
+
+    await user.type(within(staffRow as HTMLElement).getByLabelText("New password Sneha Joshi"), "newpass1");
+    await user.click(within(staffRow as HTMLElement).getByRole("button", { name: "Reset password" }));
+
+    expect(await screen.findByText("Password reset for Sneha Joshi.")).toBeInTheDocument();
+    await expect(loginWithPhone("9834567890", "pass123")).rejects.toThrow("Invalid phone or password.");
+    await expect(loginWithPhone("9834567890", "newpass1")).resolves.toMatchObject({
+      name: "Sneha Joshi",
+      active: true,
+      signupStatus: "approved",
+    });
+  });
+
+  it("does not reactivate disabled staff when Admin resets their password", async () => {
+    const user = userEvent.setup();
+
+    renderApp(<App initialRole="admin" />);
+    await user.click(screen.getByRole("button", { name: "Staff" }));
+
+    const staffRowText = await screen.findByText("Sneha Joshi");
+    const staffRow = staffRowText.closest("article");
+    expect(staffRow).not.toBeNull();
+
+    await user.click(within(staffRow as HTMLElement).getByRole("button", { name: "Deactivate" }));
+    await waitFor(() => expect(within(staffRow as HTMLElement).getByText("Disabled")).toBeInTheDocument());
+
+    await user.type(within(staffRow as HTMLElement).getByLabelText("New password Sneha Joshi"), "newpass2");
+    await user.click(within(staffRow as HTMLElement).getByRole("button", { name: "Reset password" }));
+
+    expect(await screen.findByText("Password reset for Sneha Joshi.")).toBeInTheDocument();
+    await expect(loginWithPhone("9834567890", "newpass2")).rejects.toThrow(
+      "Signed-in account is disabled in Snowy Owl Operations.",
+    );
+  });
 });
