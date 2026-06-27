@@ -10,10 +10,12 @@ Use this if staff entered the wrong EOD gelato weight today.
 2. Check in to the store.
 3. Tap **Store**.
 4. Tap **EOD gelato weights**.
-5. Change the wrong weight.
-6. Tap **Update count**.
+5. Find the pan row.
+6. Change the wrong weight.
+7. Tap **Update weight**.
 
 If the pan is empty, enter **0**.
+Do not enter a weight higher than the **Opening** weight shown by the app.
 
 ![Manager EOD correction](images/manager-eod-correction.png)
 
@@ -28,19 +30,19 @@ If the app says there is a mismatch:
 
 ![Store empty pan count](images/store-empty-pan-count.png)
 
-## 3. Help Staff With Rejected Dispatch
+## 3. Help Staff With Missing Or Rejected Pan
 
-If staff rejected a dispatch by mistake:
+If staff marked one pan missing or rejected by mistake:
 
 1. Open **Incoming pans**.
 2. Find **Rejected pans**.
-3. Tap **Accept rejected dispatch**.
+3. Find the correct pan ID.
+4. Tap **Accept pan** for only that pan.
 
-Only do this if the physical pans are really in the store.
+Only do this if the physical pan is really in the store.
 
 ## Remember
 
 - Staff can make mistakes. Correct same-day EOD in the app.
 - Check physical pans before resolving a mismatch.
 - If the problem is old or unclear, ask Admin.
-

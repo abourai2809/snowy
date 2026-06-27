@@ -7,9 +7,11 @@ Use this guide for lab production, dispatch to store, and receiving empty pans.
 1. Sign in as **Lab Staff** or **Lab Manager**.
 2. Tap **Lab**.
 3. In **Add lab production**, choose the flavour.
-4. Enter production date, pan count, and full pan weight.
-5. Tap **Save production**.
-6. Write the shown **Pan IDs** on the physical pans.
+4. Enter production date.
+5. Enter pan count.
+6. Enter the weight for each pan in kg.
+7. Tap **Save production**.
+8. Write the shown **Pan IDs** on the physical pans.
 
 ![Lab production pan IDs](images/lab-production-pan-ids.png)
 
@@ -34,6 +36,6 @@ Use this guide for lab production, dispatch to store, and receiving empty pans.
 ## Remember
 
 - Do not dispatch a pan unless the physical pan is going to that store.
+- Each pan can have a different weight.
 - Pan IDs must be written clearly on the physical pans.
 - If empty pans received from store do not match the app, tap **Dispute**.
-

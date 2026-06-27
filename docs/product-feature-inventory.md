@@ -75,7 +75,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 
 ## Lab Features
 
-- Add lab production by flavour, production date, pan count, full pan weight, and notes.
+- Add lab production by flavour, production date, pan count, per-pan weights, and notes.
 - Generate staff-friendly pan IDs from flavour short code, numeric date, and sequence.
 - Show newly generated pan IDs immediately so lab staff can label the physical pans.
 - Store batch ID separately from pan ID.
@@ -96,11 +96,12 @@ Detailed pan lifecycle rules are documented in [pan-workflow.md](pan-workflow.md
 - Store workflow forms open from dedicated action views after staff choose the action.
 - Store workflow actions ask staff to confirm the current checked-in store and run warning-only browser location validation before editable fields are shown.
 - Browser location mismatch shows a strong warning, but staff can explicitly continue when they are sure the selected store/action is correct.
-- Receive incoming lab dispatches for the active store.
+- Receive incoming lab dispatches for the active store at individual pan level, with **Accept all** for the normal all-correct case.
 - Accepted dispatched pans become backup/deep-freezer stock at that store.
-- Rejected dispatches stay out of backup stock and can be overturned from the rejected queue if the rejection was a mistake.
-- Move a deep-freezer pan to display by choosing flavour first, then an eligible pan ID for that flavour.
-- The first eligible pan option is FIFO-recommended from the oldest store backup pan for that flavour.
+- Missing or rejected pan IDs stay out of backup stock. If only some pans are accepted, the dispatch is partially accepted and the missing/rejected pan IDs remain visible for review.
+- Missing/rejected pan decisions can be overturned one pan at a time if the pan is later found or the rejection was a mistake.
+- Move a deep-freezer pan to display by choosing flavour first; the app shows the FIFO-recommended pan ID from the oldest eligible store backup pan for that flavour.
+- Store staff can use a manager-directed FIFO override path, which warns staff and logs the recommended pan.
 - Each store can have only one active display-assigned pan per flavour.
 - Each store can have only one open or partial pan per flavour.
 - A display-assigned pan keeps its pan ID attached to that flavour until it is explicitly checked out of display.
@@ -109,11 +110,13 @@ Detailed pan lifecycle rules are documented in [pan-workflow.md](pan-workflow.md
 - Partial pans returned from display to deep freezer are shown separately from new/full deep-freezer pans.
 - Display movement requires Full or Partial. Partial requires weight.
 - EOD gelato weights are a distinct store action.
-- EOD gelato rows are prefilled from relevant display/deep-freezer stock to reduce missed entries.
-- EOD display rows are flavour-level rows with display-pan count detail; the backend assigns the weight to active display pans when possible.
+- EOD gelato rows are prefilled from pans that were in display during the business day to reduce missed entries.
+- EOD display rows are pan-level rows; staff enter the closing weight for each shown pan ID.
 - Staff enter weights in kg; gram-like values such as 6000 are blocked.
+- Pan-level EOD closing weight cannot be higher than the pan's opening/display-start weight.
 - EOD submission updates pan lifecycle automatically:
-  - one active display pan gets the flavour-level EOD weight,
+  - pan-level rows update their attached pan,
+  - one active display pan can still receive a legacy flavour-level EOD weight,
   - no active display pan saves a flavour-level review row,
   - multiple active display pans are allocated FIFO and flagged for review,
   - over-capacity EOD weights are saved for review without lifecycle mutation,

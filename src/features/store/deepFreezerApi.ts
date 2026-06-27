@@ -423,8 +423,30 @@ export async function getLatestDeepFreezerCount(
 
 async function listReceivedWeightsByFlavour(locationId: string, baselineMs: number): Promise<Map<string, number>> {
   const receivedWeights = new Map<string, number>();
+  const acceptedPanEvents = (await listPanEvents(locationId)).filter(
+    (event) => event.eventType === "incoming_pan_accepted" && happenedAfterBaseline(event.recordedAt, baselineMs),
+  );
+  const panLevelReceiptDispatchIds = new Set(
+    acceptedPanEvents
+      .map((event) => event.metadata.dispatchId)
+      .filter((dispatchId): dispatchId is string => typeof dispatchId === "string"),
+  );
+
+  const acceptedPans = await listPansByIds([...new Set(acceptedPanEvents.map((event) => event.panUuid))]);
+  const acceptedPanById = new Map(acceptedPans.map((pan) => [pan.id, pan]));
+
+  acceptedPanEvents.forEach((event) => {
+    const pan = acceptedPanById.get(event.panUuid);
+    if (!pan) return;
+
+    addWeight(receivedWeights, pan.flavourId, event.weightKg ?? pan.fullWeightKg ?? pan.currentWeightKg ?? 0);
+  });
+
   const receipts = (await listStoreReceipts(locationId)).filter(
-    (receipt) => receipt.status === "accepted" && happenedAfterBaseline(receipt.receivedAt, baselineMs),
+    (receipt) =>
+      receipt.status === "accepted" &&
+      happenedAfterBaseline(receipt.receivedAt, baselineMs) &&
+      !panLevelReceiptDispatchIds.has(receipt.dispatchId),
   );
 
   await Promise.all(

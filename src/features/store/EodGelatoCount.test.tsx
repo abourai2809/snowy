@@ -317,6 +317,31 @@ describe("store EOD gelato counts", () => {
     ).rejects.toThrow("EOD gelato weight looks too high. Enter kilograms, not grams. Use 6 instead of 6000.");
   });
 
+  it("rejects pan-level EOD weights above the opening display weight", async () => {
+    const [displayPanUuid] = await seedStorePans(1);
+    await movePanToDisplay({
+      panUuid: displayPanUuid,
+      storeLocationId: "malsi",
+      fillState: "partial",
+      weightKg: 1.2,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    await expect(
+      submitEodGelatoCount({
+        locationId: "malsi",
+        businessDate: todayDate(),
+        notes: null,
+        actorId: "staff-store",
+        actorRole: "store_staff",
+        actorLocationId: "malsi",
+        items: [{ panUuid: displayPanUuid, weightKg: 1.3 }],
+      }),
+    ).rejects.toThrow("EOD weight for PIS-20260523-01 cannot be higher than opening weight (1.2 kg).");
+  });
+
   it("lets Store Manager correct same-day counts", async () => {
     const [displayPanUuid] = await seedStorePans(1);
     await movePanToDisplay({
@@ -385,7 +410,6 @@ describe("store EOD gelato counts", () => {
     renderApp(
       <EodGelatoCount
         locationId="malsi"
-        displayPans={[]}
         flavours={flavours}
         onChanged={() => undefined}
         actorId="staff-store"
@@ -394,8 +418,8 @@ describe("store EOD gelato counts", () => {
       />,
     );
 
-    const weightInput = await screen.findByLabelText(`EOD weight ${flavour!.name}`);
-    expect(weightInput).toHaveValue(0);
+    expect(await screen.findByText("No display pans found for today.")).toBeInTheDocument();
+    expect(screen.queryByLabelText(`EOD weight ${flavour!.name}`)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add gelato line" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/EOD gelato item/)).not.toBeInTheDocument();
   });
@@ -416,7 +440,6 @@ describe("store EOD gelato counts", () => {
     renderApp(
       <EodGelatoCount
         locationId="malsi"
-        displayPans={await listDisplayPans("malsi")}
         flavours={flavours}
         onChanged={() => undefined}
         actorId="staff-store"
@@ -426,8 +449,9 @@ describe("store EOD gelato counts", () => {
     );
 
     await waitFor(() => expect(screen.getByText("PISTACHTO")).toBeInTheDocument());
-    expect(screen.getByText("1 display pan")).toBeInTheDocument();
-    expect(screen.queryByText(/PIS-20260523-01/)).not.toBeInTheDocument();
+    expect(screen.getByText("PIS-20260523-01")).toBeInTheDocument();
+    expect(screen.getByText("Opening 3.5 kg")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit weight" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });

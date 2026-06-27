@@ -7,7 +7,8 @@ This document is the product reference for the end-to-end journey of a gelato pa
 - The app assigns a pan ID at production time, one ID per physical pan.
 - Pan ID is operational. Batch ID is separate and supports traceability.
 - Lab production and lab dispatch are separate workflows. Production creates lab inventory; dispatch moves selected available pans to a store.
-- Store display movement should be FIFO-guided. Staff choose a flavour, and the app recommends the oldest eligible deep-freezer pan for that flavour.
+- Store display movement should be FIFO-guided. Staff choose a flavour, and the app shows the oldest eligible deep-freezer pan for that flavour.
+- Store staff should not choose a pan ID by default. A manager-directed override path can expose alternate pan IDs, warn staff, and log the recommended pan.
 - One store and flavour should have at most one open or partial pan. This is stricter than the older issue #51 wording if that issue still says two.
 - One store and flavour should have at most one active display-assigned pan.
 - If staff brings out a replacement pan because the old display pan is too low, the old pan is marked empty/depleted in the app, even if a small physical amount remains.
@@ -33,7 +34,7 @@ The maintained color flowchart is now in [staff-guides/pan-workflow/flowchart.md
 
 ### Production
 
-Lab records flavour, production date, pan count, full pan weight when known, and notes. The app creates a batch and one pan record per physical pan. The app generates staff-friendly pan IDs immediately so lab staff can label pans before storage or dispatch.
+Lab records flavour, production date, pan count, per-pan weights, and notes. The app creates a batch and one pan record per physical pan. The app generates staff-friendly pan IDs immediately so lab staff can label pans before storage or dispatch.
 
 ### Lab Dispatch
 
@@ -41,15 +42,17 @@ Lab dispatch selects from lab-available pans only. A pan that is already dispatc
 
 ### Store Receiving
 
-Store staff accept or reject incoming dispatches. Accepted pans become store backup/deep-freezer stock. Rejected pans do not enter store inventory.
+Store staff receive incoming dispatches at pan level. The normal fast path is **Accept all**, but staff must be able to mark each pan as accepted, missing, or rejected/wrong-pan.
 
-If a rejection was accidental, the store can overturn the rejection from the rejected queue and accept the pan, provided the dispatch has not already been otherwise resolved. The overturn must create an audit/receipt record.
+Accepted pans become store backup/deep-freezer stock. Missing or rejected pans do not enter store inventory. If some pans are accepted and others are missing/rejected, the dispatch becomes partially accepted and the missing/rejected pan IDs stay visible for manager/Admin review.
+
+If a missing/rejected pan was marked incorrectly or is later found, the store can accept that individual pan from the rejected queue. The overturn must create an audit/receipt record for that pan.
 
 ### FIFO Display Movement
 
-Display movement starts with flavour. The app should recommend the oldest eligible store-backup pan for that flavour. Staff may need an override path, but overrides should be logged.
+Display movement starts with flavour. The app should show the oldest eligible store-backup pan for that flavour as the FIFO recommendation. Staff may need an override path, but overrides should be manager-directed, show a clear warning, and be logged with the recommended pan.
 
-If no active display pan exists for that store and flavour, the selected FIFO pan moves to display and becomes the active display-assigned pan.
+If no active display pan exists for that store and flavour, the recommended FIFO pan moves to display and becomes the active display-assigned pan. If an override is used, the selected override pan moves instead.
 
 If an active display pan already exists, staff use a guided swap workflow. Guided swap is one action that checks out the old display pan and checks in the new display pan together.
 
@@ -63,7 +66,11 @@ The old pan can be handled three ways:
 
 ### EOD Gelato Count
 
-EOD staff should enter display weight by flavour. The backend uses active display assignment and pan history to attach the weight to a pan whenever possible.
+EOD staff should see all pans that were in display during the day and enter closing weight for each pan ID. Staff should not manually pick pan IDs at EOD.
+
+Pan-level EOD closing weight cannot be higher than that pan's opening/display-start weight.
+
+Legacy or unexpected flavour-level EOD rows can still be normalized by the backend:
 
 If there is exactly one active display pan for a flavour, the EOD weight is assigned to that pan.
 

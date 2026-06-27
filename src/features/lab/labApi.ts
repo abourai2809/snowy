@@ -7,8 +7,9 @@ import { validateGelatoPanWeightKg } from "../../domain/weights";
 export interface ProductionInput {
   flavour: Flavour;
   productionDate: string;
-  panCount: number;
-  fullWeightKg: number;
+  panCount?: number;
+  fullWeightKg?: number;
+  panWeightsKg?: number[];
   notes: string | null;
   producedBy: string | null;
 }
@@ -113,11 +114,17 @@ function createBatchCode(shortCode: string, productionDate: string): string {
 }
 
 export async function createProduction(input: ProductionInput): Promise<ProductionResult> {
-  if (input.panCount < 1) {
+  const panWeightsKg =
+    input.panWeightsKg ??
+    Array.from({ length: input.panCount ?? 0 }, () => input.fullWeightKg ?? Number.NaN);
+
+  if (panWeightsKg.length < 1) {
     throw new Error("Pan count must be at least 1.");
   }
 
-  const weightError = validateGelatoPanWeightKg(input.fullWeightKg, { fieldName: "Full pan weight" });
+  const weightError = panWeightsKg
+    .map((weightKg, index) => validateGelatoPanWeightKg(weightKg, { fieldName: `Pan ${index + 1} weight` }))
+    .find(Boolean);
   if (weightError) {
     throw new Error(weightError);
   }
@@ -133,7 +140,7 @@ export async function createProduction(input: ProductionInput): Promise<Producti
     };
 
     const startSequence = nextDemoSequenceFor(input.flavour.shortCode, input.productionDate);
-    const pans = Array.from({ length: input.panCount }, (_, index): Pan => ({
+    const pans = panWeightsKg.map((weightKg, index): Pan => ({
       id: makeId("pan"),
       panId: buildPanId(input.flavour.shortCode, input.productionDate, startSequence + index),
       batchId: batch.id,
@@ -141,8 +148,8 @@ export async function createProduction(input: ProductionInput): Promise<Producti
       currentLocationId: labLocationId,
       panRole: "backup",
       status: "available",
-      fullWeightKg: input.fullWeightKg,
-      currentWeightKg: input.fullWeightKg,
+      fullWeightKg: weightKg,
+      currentWeightKg: weightKg,
       producedAt: new Date(`${input.productionDate}T09:00:00`).toISOString(),
       active: true,
     }));
@@ -182,15 +189,15 @@ export async function createProduction(input: ProductionInput): Promise<Producti
 
   if (batchError) throw batchError;
 
-  const pansPayload = Array.from({ length: input.panCount }, (_, index) => ({
+  const pansPayload = panWeightsKg.map((weightKg, index) => ({
     pan_id: buildPanId(input.flavour.shortCode, input.productionDate, startSequence + index),
     batch_id: batchRow.id,
     flavour_id: input.flavour.id,
     current_location_id: labLocationId,
     pan_role: "backup",
     status: "available",
-    full_weight_kg: input.fullWeightKg,
-    current_weight_kg: input.fullWeightKg,
+    full_weight_kg: weightKg,
+    current_weight_kg: weightKg,
   }));
 
   const { data: panRows, error: panError } = await supabase.from("pans").insert(pansPayload).select();

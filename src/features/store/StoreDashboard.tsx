@@ -304,7 +304,6 @@ function renderStoreAction({
           <EodGelatoCount
             {...actor}
             locationId={locationId}
-            displayPans={displayPans}
             flavours={flavours}
             onChanged={() => void load()}
           />

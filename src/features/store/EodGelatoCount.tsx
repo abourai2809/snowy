@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { EodCountWithItems, StoreActor } from "./storeApi";
-import { getEodCount, submitEodGelatoCount } from "./storeApi";
+import type { EodCountWithItems, EodDisplayPanRow, StoreActor } from "./storeApi";
+import { getEodCount, listEodDisplayPanRows, submitEodGelatoCount } from "./storeApi";
 import type { Flavour } from "../../domain/flavours";
-import type { Pan } from "../../domain/pans";
-import { listProjectedDeepFreezerBalances } from "./deepFreezerApi";
 
 interface EodEntry {
   id: string;
-  panUuid: string | null;
-  flavourId: string | null;
+  panUuid: string;
+  flavourId: string;
+  panId: string;
+  openingWeightKg: number;
+  lockedEmpty: boolean;
   weightKg: string;
 }
 
 interface EodGelatoCountProps extends StoreActor {
   locationId: string;
-  displayPans: Pan[];
   flavours: Flavour[];
   onChanged: () => void;
 }
@@ -28,7 +28,6 @@ export function EodGelatoCount({
   actorId,
   actorLocationId,
   actorRole,
-  displayPans,
   flavours,
   locationId,
   onChanged,
@@ -46,52 +45,36 @@ export function EodGelatoCount({
 
     async function loadRows() {
       try {
-        const [existing, projectedBalances] = await Promise.all([
+        const [existing, displayRows] = await Promise.all([
           getEodCount(locationId, businessDate),
-          listProjectedDeepFreezerBalances(locationId),
+          listEodDisplayPanRows(locationId, businessDate),
         ]);
         if (!mounted) return;
 
-        const existingWeightsByFlavour = new Map<string, number>();
+        const existingWeightsByPanId = new Map<string, number>();
         existing?.items.forEach((item) => {
-          const itemFlavourId = item.flavourId ?? displayPans.find((pan) => pan.id === item.panId)?.flavourId ?? null;
-          if (!itemFlavourId) return;
-          existingWeightsByFlavour.set(itemFlavourId, (existingWeightsByFlavour.get(itemFlavourId) ?? 0) + (item.weightKg ?? 0));
+          if (!item.panId) return;
+          existingWeightsByPanId.set(item.panId, item.weightKg ?? 0);
         });
-        const displayFlavourIds = new Set(displayPans.map((pan) => pan.flavourId));
-        const relevantFlavourIds = new Set(
-          projectedBalances.filter((balance) => balance.currentWeightKg > 0).map((balance) => balance.flavourId),
-        );
-        existing?.items.forEach((item) => {
-          if (item.flavourId) relevantFlavourIds.add(item.flavourId);
-        });
-        displayFlavourIds.forEach((flavourId) => relevantFlavourIds.add(flavourId));
-        const displayEntries = [...displayFlavourIds].map((flavourId): EodEntry => {
-          const displayWeightKg = displayPans
-            .filter((pan) => pan.flavourId === flavourId)
-            .reduce((sum, pan) => sum + (pan.currentWeightKg ?? 0), 0);
-          return {
-            id: `display-flavour:${flavourId}`,
-            panUuid: null,
-            flavourId,
-            weightKg: String(existingWeightsByFlavour.get(flavourId) ?? displayWeightKg),
-          };
-        });
-        const flavourEntries = [...relevantFlavourIds]
-          .filter((flavourId) => !displayFlavourIds.has(flavourId))
-          .map((flavourId): EodEntry => ({
-            id: `flavour:${flavourId}`,
-            panUuid: null,
-            flavourId,
-            weightKg: String(existingWeightsByFlavour.get(flavourId) ?? 0),
-          }));
-        const flavourName = (flavourId: string | null) => flavourById.get(flavourId ?? "")?.name ?? "";
 
-        setEntries(
-          [...displayEntries, ...flavourEntries].sort((a, b) =>
-            flavourName(a.flavourId).localeCompare(flavourName(b.flavourId)),
-          ),
-        );
+        const flavourName = (flavourId: string) => flavourById.get(flavourId)?.name ?? "";
+        const entries = displayRows
+          .map((row: EodDisplayPanRow): EodEntry => ({
+            id: row.pan.id,
+            panUuid: row.pan.id,
+            flavourId: row.pan.flavourId,
+            panId: row.pan.panId,
+            openingWeightKg: row.openingWeightKg,
+            lockedEmpty: row.lockedEmpty && !existingWeightsByPanId.has(row.pan.id),
+            weightKg: String(existingWeightsByPanId.get(row.pan.id) ?? (row.lockedEmpty ? 0 : row.pan.currentWeightKg ?? row.openingWeightKg)),
+          }))
+          .sort((a, b) => {
+            const flavourSort = flavourName(a.flavourId).localeCompare(flavourName(b.flavourId));
+            if (flavourSort !== 0) return flavourSort;
+            return a.panId.localeCompare(b.panId);
+          });
+
+        setEntries(entries);
         setCount(existing);
         setError(null);
       } catch (countError) {
@@ -104,12 +87,31 @@ export function EodGelatoCount({
     return () => {
       mounted = false;
     };
-  }, [businessDate, displayPans, flavours, locationId]);
+  }, [businessDate, flavours, locationId]);
+
+  function validateEntries(): string | null {
+    for (const entry of entries) {
+      const weightKg = Number(entry.weightKg);
+      if (entry.lockedEmpty && weightKg !== 0) {
+        return `${entry.panId} is already marked empty. Keep its EOD weight at 0 kg.`;
+      }
+      if (weightKg > entry.openingWeightKg) {
+        return `${entry.panId} cannot be higher than opening weight (${entry.openingWeightKg} kg).`;
+      }
+    }
+    return null;
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setMessage(null);
+
+    const validationError = validateEntries();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
 
     try {
       const submitted = await submitEodGelatoCount({
@@ -126,7 +128,7 @@ export function EodGelatoCount({
         })),
       });
       setCount(submitted);
-      setMessage(submitted.status === "corrected" ? "EOD count corrected." : "EOD count submitted.");
+      setMessage(submitted.status === "corrected" ? "EOD weight corrected." : "EOD weight submitted.");
       onChanged();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to submit EOD count.");
@@ -135,14 +137,6 @@ export function EodGelatoCount({
 
   function updateEntryWeight(entryId: string, weightKg: string) {
     setEntries((current) => current.map((entry) => (entry.id === entryId ? { ...entry, weightKg } : entry)));
-  }
-
-  function getEntryLabel(entry: EodEntry) {
-    const displayCount = displayPans.filter((item) => item.flavourId === entry.flavourId).length;
-    return {
-      name: flavourById.get(entry.flavourId ?? "")?.name ?? "Unknown flavour",
-      detail: displayCount > 0 ? `${displayCount} display pan${displayCount === 1 ? "" : "s"}` : "No display pan recorded",
-    };
   }
 
   return (
@@ -155,24 +149,27 @@ export function EodGelatoCount({
           Today: <strong>{count.status}</strong>
         </p>
       ) : null}
-      {entries.length === 0 ? <p className="muted-copy">No relevant gelato stock found for today.</p> : null}
+      {entries.length === 0 ? <p className="muted-copy">No display pans found for today.</p> : null}
       <form aria-label="EOD gelato weight form" onSubmit={submit}>
         <div className="list-stack">
           {entries.map((entry) => {
-            const label = getEntryLabel(entry);
+            const flavourName = flavourById.get(entry.flavourId)?.name ?? "Unknown flavour";
             return (
               <label className="inventory-count-row" key={entry.id}>
                 <span>
-                  <strong>{label.name}</strong>
-                  <small>{label.detail}</small>
+                  <strong>{flavourName}</strong>
+                  <small>{entry.panId}</small>
+                  <small>Opening {entry.openingWeightKg} kg</small>
                 </span>
                 <input
-                  aria-label={`EOD weight ${label.name}${entry.panUuid ? ` ${label.detail}` : ""}`}
+                  aria-label={`EOD weight ${flavourName} ${entry.panId}`}
                   type="number"
                   min="0"
+                  max={entry.openingWeightKg}
                   step="0.01"
                   value={entry.weightKg}
                   onChange={(event) => updateEntryWeight(entry.id, event.target.value)}
+                  disabled={entry.lockedEmpty || Boolean(staffCorrectionLocked)}
                   required
                 />
               </label>
@@ -181,7 +178,7 @@ export function EodGelatoCount({
         </div>
         <div className="action-row">
           <button className="primary-button" type="submit" disabled={entries.length === 0 || Boolean(staffCorrectionLocked)}>
-            {count ? "Update count" : "Submit count"}
+            {count ? "Update weight" : "Submit weight"}
           </button>
         </div>
       </form>

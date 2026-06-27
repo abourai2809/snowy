@@ -18,7 +18,7 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
   const [flavourId, setFlavourId] = useState("");
   const [productionDate, setProductionDate] = useState(todayKey());
   const [panCount, setPanCount] = useState(1);
-  const [fullWeightKg, setFullWeightKg] = useState(3.5);
+  const [panWeightsKg, setPanWeightsKg] = useState<string[]>(["3.5"]);
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +29,18 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
     [flavourId, flavours],
   );
 
+  function updatePanCount(value: number) {
+    const nextCount = Number.isFinite(value) && value > 0 ? Math.floor(value) : 1;
+    setPanCount(nextCount);
+    setPanWeightsKg((current) =>
+      Array.from({ length: nextCount }, (_, index) => current[index] ?? current[current.length - 1] ?? "3.5"),
+    );
+  }
+
+  function updatePanWeight(index: number, value: string) {
+    setPanWeightsKg((current) => current.map((weight, currentIndex) => (currentIndex === index ? value : weight)));
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedFlavour) {
@@ -38,7 +50,10 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
       return;
     }
 
-    const weightError = validateGelatoPanWeightKg(fullWeightKg, { fieldName: "Full pan weight" });
+    const parsedWeights = panWeightsKg.map((weight) => Number(weight));
+    const weightError = parsedWeights
+      .map((weight, index) => validateGelatoPanWeightKg(weight, { fieldName: `Pan ${index + 1} weight` }))
+      .find(Boolean);
     if (weightError) {
       setError(weightError);
       setMessage(null);
@@ -50,8 +65,7 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
       const result = await createProduction({
         flavour: selectedFlavour,
         productionDate,
-        panCount,
-        fullWeightKg,
+        panWeightsKg: parsedWeights,
         notes: notes.trim() || null,
         producedBy: profile.id,
       });
@@ -88,19 +102,24 @@ export function ProductionForm({ flavours, profile, onCreated }: ProductionFormP
             type="number"
             min="1"
             value={panCount}
-            onChange={(event) => setPanCount(Number(event.target.value))}
+            onChange={(event) => updatePanCount(Number(event.target.value))}
           />
         </label>
-        <label className="field">
-          <span>Full pan weight kg</span>
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            value={fullWeightKg}
-            onChange={(event) => setFullWeightKg(Number(event.target.value))}
-          />
-        </label>
+        <div className="pan-weight-grid" aria-label="Pan weights">
+          {panWeightsKg.map((weightKg, index) => (
+            <label className="field compact-field" key={index}>
+              <span>Pan {index + 1} weight kg</span>
+              <input
+                aria-label={`Pan ${index + 1} weight kg`}
+                type="number"
+                min="0"
+                step="0.1"
+                value={weightKg}
+                onChange={(event) => updatePanWeight(index, event.target.value)}
+              />
+            </label>
+          ))}
+        </div>
         <label className="field">
           <span>Material usage notes</span>
           <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" />

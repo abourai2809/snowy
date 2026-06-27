@@ -27,6 +27,7 @@ import {
 
 export interface IncomingDispatch extends Dispatch {
   pans: Pan[];
+  panReceiptStatusByPanId: Record<string, IncomingPanReceiptStatus>;
 }
 
 export interface StoreActor {
@@ -43,12 +44,29 @@ export interface AcceptDispatchInput extends StoreActor {
 
 export type RejectDispatchInput = AcceptDispatchInput;
 export type OverturnRejectedDispatchInput = AcceptDispatchInput;
+export type IncomingPanReceiptStatus = "pending" | "accepted" | "missing" | "rejected";
+export type IncomingPanReceiptDecisionStatus = Exclude<IncomingPanReceiptStatus, "pending">;
+
+export interface IncomingPanReceiptDecision {
+  panUuid: string;
+  status: IncomingPanReceiptDecisionStatus;
+  notes?: string | null;
+}
+
+export interface ReceiveIncomingPansInput extends StoreActor {
+  dispatchId: string;
+  locationId: string;
+  decisions: IncomingPanReceiptDecision[];
+  notes: string | null;
+}
 
 export interface DisplayMovementInput extends StoreActor {
   panUuid: string;
   storeLocationId: string;
   fillState: FillState;
   weightKg: number | null;
+  fifoOverride?: boolean;
+  recommendedPanUuid?: string | null;
 }
 
 export interface CheckoutDisplayPanInput extends StoreActor {
@@ -62,6 +80,8 @@ export interface SwapDisplayPanInput extends StoreActor {
   storeLocationId: string;
   checkoutPanUuid?: string | null;
   checkoutWeightKg?: number | null;
+  fifoOverride?: boolean;
+  recommendedPanUuid?: string | null;
 }
 
 export interface EodCountInput extends StoreActor {
@@ -78,6 +98,12 @@ export interface EodCountInput extends StoreActor {
 
 export interface EodCountWithItems extends EodCount {
   items: EodCountItem[];
+}
+
+export interface EodDisplayPanRow {
+  pan: Pan;
+  openingWeightKg: number;
+  lockedEmpty: boolean;
 }
 
 export interface EodGelatoCorrectionInput {
@@ -149,6 +175,14 @@ function makeId(prefix: string): string {
 
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function dateKey(value: string): string {
+  return value.slice(0, 10);
+}
+
+function formatWeightKg(weightKg: number): string {
+  return Number.isInteger(weightKg) ? String(weightKg) : weightKg.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 function mapReceipt(row: Record<string, unknown>): StoreReceipt {
@@ -255,6 +289,34 @@ function mapEmptyPanPhysicalCount(row: Record<string, unknown>): EmptyPanPhysica
 
 function isGelatoEodItem(item: EodCountItem): boolean {
   return item.panId !== null || item.flavourId !== null;
+}
+
+function statusForReceiptEvent(eventType: string): IncomingPanReceiptDecisionStatus | null {
+  if (eventType === "incoming_pan_accepted") return "accepted";
+  if (eventType === "incoming_pan_missing") return "missing";
+  if (eventType === "incoming_pan_rejected") return "rejected";
+  return null;
+}
+
+function eventTypeForReceiptStatus(status: IncomingPanReceiptDecisionStatus): string {
+  if (status === "accepted") return "incoming_pan_accepted";
+  if (status === "missing") return "incoming_pan_missing";
+  return "incoming_pan_rejected";
+}
+
+function summarizeDispatchReceiptStatus(
+  pans: Pan[],
+  panReceiptStatusByPanId: Record<string, IncomingPanReceiptStatus>,
+): Dispatch["status"] {
+  const statuses = pans.map((pan) => panReceiptStatusByPanId[pan.id] ?? "pending");
+  const acceptedCount = statuses.filter((status) => status === "accepted").length;
+  const rejectedCount = statuses.filter((status) => status === "missing" || status === "rejected").length;
+  const pendingCount = statuses.filter((status) => status === "pending").length;
+
+  if (acceptedCount === statuses.length && statuses.length > 0) return "accepted";
+  if (acceptedCount > 0 && (rejectedCount > 0 || pendingCount > 0)) return "partially_accepted";
+  if (acceptedCount === 0 && pendingCount === 0 && rejectedCount > 0) return "rejected";
+  return "pending";
 }
 
 export function resetDemoStoreData() {
@@ -555,18 +617,31 @@ async function replaceEodItems(countId: string, items: EodCountInput["items"]): 
 
 export async function listIncomingDispatches(locationId: string): Promise<IncomingDispatch[]> {
   const dispatches = (await listLabDispatches()).filter(
-    (dispatch) => dispatch.toLocationId === locationId && dispatch.status === "pending",
+    (dispatch) =>
+      dispatch.toLocationId === locationId &&
+      (dispatch.status === "pending" || dispatch.status === "partially_accepted"),
   );
 
-  return hydrateDispatchPans(dispatches);
+  const hydrated = await hydrateDispatchPans(dispatches);
+  return hydrated.filter((dispatch) =>
+    dispatch.pans.some((pan) => (dispatch.panReceiptStatusByPanId[pan.id] ?? "pending") === "pending"),
+  );
 }
 
 export async function listRejectedDispatches(locationId: string): Promise<IncomingDispatch[]> {
   const dispatches = (await listLabDispatches()).filter(
-    (dispatch) => dispatch.toLocationId === locationId && dispatch.status === "rejected",
+    (dispatch) =>
+      dispatch.toLocationId === locationId &&
+      (dispatch.status === "pending" || dispatch.status === "rejected" || dispatch.status === "partially_accepted"),
   );
 
-  return hydrateDispatchPans(dispatches);
+  const hydrated = await hydrateDispatchPans(dispatches);
+  return hydrated.filter((dispatch) =>
+    dispatch.pans.some((pan) => {
+      const status = dispatch.panReceiptStatusByPanId[pan.id] ?? "pending";
+      return status === "missing" || status === "rejected";
+    }),
+  );
 }
 
 async function hydrateDispatchPans(dispatches: Dispatch[]): Promise<IncomingDispatch[]> {
@@ -574,9 +649,42 @@ async function hydrateDispatchPans(dispatches: Dispatch[]): Promise<IncomingDisp
     dispatches.map(async (dispatch) => {
       const items = await listDispatchItems(dispatch.id);
       const pans = await listPansByIds(items.map((item) => item.panId));
-      return { ...dispatch, pans };
+      const panReceiptStatusByPanId = await listPanReceiptStatuses(dispatch, pans);
+      return { ...dispatch, pans, panReceiptStatusByPanId };
     }),
   );
+}
+
+async function listPanReceiptStatuses(
+  dispatch: Dispatch,
+  pans: Pan[],
+): Promise<Record<string, IncomingPanReceiptStatus>> {
+  const statuses = Object.fromEntries(pans.map((pan): [string, IncomingPanReceiptStatus] => [pan.id, "pending"]));
+  const panIds = new Set(pans.map((pan) => pan.id));
+  const events = (await listPanEvents(dispatch.toLocationId))
+    .filter((event) => event.metadata.dispatchId === dispatch.id && panIds.has(event.panUuid))
+    .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+
+  events.forEach((event) => {
+    const status = statusForReceiptEvent(event.eventType);
+    if (status) {
+      statuses[event.panUuid] = status;
+    }
+  });
+
+  if (dispatch.status === "rejected" && events.length === 0) {
+    pans.forEach((pan) => {
+      statuses[pan.id] = "rejected";
+    });
+  }
+
+  if (dispatch.status === "accepted" && events.length === 0) {
+    pans.forEach((pan) => {
+      statuses[pan.id] = "accepted";
+    });
+  }
+
+  return statuses;
 }
 
 export async function listStoreReceipts(locationId?: string): Promise<StoreReceipt[]> {
@@ -594,57 +702,156 @@ export async function listStoreReceipts(locationId?: string): Promise<StoreRecei
   return data.map(mapReceipt);
 }
 
-async function acceptDispatch(dispatch: IncomingDispatch, input: AcceptDispatchInput): Promise<StoreReceipt> {
-  const receipt = await createReceipt(input, "accepted");
-  await Promise.all(
-    dispatch.pans.map((pan) =>
-      updatePanState(pan.id, {
-        currentLocationId: input.locationId,
-        panRole: "backup",
-        status: "received",
-      }),
-    ),
+async function getReceivableDispatch(dispatchId: string, locationId: string): Promise<IncomingDispatch | null> {
+  const dispatch = (await listLabDispatches()).find(
+    (item) =>
+      item.id === dispatchId &&
+      item.toLocationId === locationId &&
+      (item.status === "pending" || item.status === "partially_accepted" || item.status === "rejected"),
   );
-  await updateDispatchStatus(input.dispatchId, "accepted");
+  if (!dispatch) {
+    return null;
+  }
+
+  const [hydrated] = await hydrateDispatchPans([dispatch]);
+  return hydrated ?? null;
+}
+
+function summarizeReceiptNotes(
+  dispatch: IncomingDispatch,
+  decisions: IncomingPanReceiptDecision[],
+  fallback: string | null,
+): string | null {
+  if (fallback) return fallback;
+
+  const panById = new Map(dispatch.pans.map((pan): [string, Pan] => [pan.id, pan]));
+  return decisions
+    .map((decision) => {
+      const panId = panById.get(decision.panUuid)?.panId ?? decision.panUuid;
+      return `${panId}: ${decision.status}`;
+    })
+    .join("; ");
+}
+
+export async function receiveIncomingDispatchPans(input: ReceiveIncomingPansInput): Promise<StoreReceipt> {
+  assertStoreLocation(input, input.locationId);
+
+  if (input.decisions.length === 0) {
+    throw new Error("Choose at least one pan to receive.");
+  }
+
+  const dispatch = await getReceivableDispatch(input.dispatchId, input.locationId);
+  if (!dispatch) {
+    throw new Error("Incoming dispatch not found for this store.");
+  }
+
+  const panById = new Map(dispatch.pans.map((pan): [string, Pan] => [pan.id, pan]));
+  const nextStatuses = { ...dispatch.panReceiptStatusByPanId };
+
+  input.decisions.forEach((decision) => {
+    if (!panById.has(decision.panUuid)) {
+      throw new Error("Selected pan is not part of this dispatch.");
+    }
+    if (nextStatuses[decision.panUuid] === "accepted" && decision.status !== "accepted") {
+      throw new Error("Accepted pans cannot be marked missing or rejected.");
+    }
+  });
+
+  const receiptStatus: StoreReceipt["status"] = input.decisions.some((decision) => decision.status === "accepted")
+    ? "accepted"
+    : "rejected";
+  const receipt = await createReceipt(
+    {
+      dispatchId: input.dispatchId,
+      locationId: input.locationId,
+      notes: summarizeReceiptNotes(dispatch, input.decisions, input.notes),
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+      actorLocationId: input.actorLocationId,
+    },
+    receiptStatus,
+  );
+
+  await Promise.all(
+    input.decisions.map(async (decision) => {
+      const pan = panById.get(decision.panUuid)!;
+      if (decision.status === "accepted") {
+        await updatePanState(pan.id, {
+          currentLocationId: input.locationId,
+          panRole: "backup",
+          status: "received",
+        });
+      }
+
+      await recordPanEvent({
+        panUuid: pan.id,
+        eventType: eventTypeForReceiptStatus(decision.status),
+        fromLocationId: dispatch.fromLocationId,
+        toLocationId: input.locationId,
+        fromRole: "backup",
+        toRole: decision.status === "accepted" ? "backup" : "store",
+        weightKg: decision.status === "accepted" ? pan.currentWeightKg ?? pan.fullWeightKg ?? null : null,
+        recordedBy: input.actorId,
+        metadata: {
+          dispatchId: dispatch.id,
+          dispatchCode: dispatch.dispatchCode,
+          receiptId: receipt.id,
+          receiptStatus: decision.status,
+          notes: decision.notes ?? null,
+        },
+      });
+      nextStatuses[pan.id] = decision.status;
+    }),
+  );
+
+  await updateDispatchStatus(input.dispatchId, summarizeDispatchReceiptStatus(dispatch.pans, nextStatuses));
   return receipt;
 }
 
 export async function acceptIncomingDispatch(input: AcceptDispatchInput): Promise<StoreReceipt> {
   assertStoreLocation(input, input.locationId);
 
-  const incoming = await listIncomingDispatches(input.locationId);
-  const dispatch = incoming.find((item) => item.id === input.dispatchId);
+  const dispatch = await getReceivableDispatch(input.dispatchId, input.locationId);
   if (!dispatch) {
     throw new Error("Incoming dispatch not found for this store.");
   }
+  const decisions = dispatch.pans
+    .filter((pan) => (dispatch.panReceiptStatusByPanId[pan.id] ?? "pending") === "pending")
+    .map((pan): IncomingPanReceiptDecision => ({ panUuid: pan.id, status: "accepted" }));
 
-  return acceptDispatch(dispatch, input);
+  return receiveIncomingDispatchPans({ ...input, decisions });
 }
 
 export async function rejectIncomingDispatch(input: RejectDispatchInput): Promise<StoreReceipt> {
   assertStoreLocation(input, input.locationId);
 
-  const incoming = await listIncomingDispatches(input.locationId);
-  const dispatch = incoming.find((item) => item.id === input.dispatchId);
+  const dispatch = await getReceivableDispatch(input.dispatchId, input.locationId);
   if (!dispatch) {
     throw new Error("Incoming dispatch not found for this store.");
   }
+  const decisions = dispatch.pans
+    .filter((pan) => (dispatch.panReceiptStatusByPanId[pan.id] ?? "pending") === "pending")
+    .map((pan): IncomingPanReceiptDecision => ({ panUuid: pan.id, status: "rejected" }));
 
-  const receipt = await createReceipt(input, "rejected");
-  await updateDispatchStatus(input.dispatchId, "rejected");
-  return receipt;
+  return receiveIncomingDispatchPans({ ...input, decisions });
 }
 
 export async function overturnRejectedDispatch(input: OverturnRejectedDispatchInput): Promise<StoreReceipt> {
   assertStoreLocation(input, input.locationId);
 
-  const rejected = await listRejectedDispatches(input.locationId);
-  const dispatch = rejected.find((item) => item.id === input.dispatchId);
+  const dispatch = await getReceivableDispatch(input.dispatchId, input.locationId);
   if (!dispatch) {
     throw new Error("Rejected dispatch not found for this store.");
   }
 
-  return acceptDispatch(dispatch, input);
+  const decisions = dispatch.pans
+    .filter((pan) => {
+      const status = dispatch.panReceiptStatusByPanId[pan.id] ?? "pending";
+      return status === "missing" || status === "rejected";
+    })
+    .map((pan): IncomingPanReceiptDecision => ({ panUuid: pan.id, status: "accepted" }));
+
+  return receiveIncomingDispatchPans({ ...input, decisions });
 }
 
 export async function listStorePans(locationId: string): Promise<Pan[]> {
@@ -660,6 +867,61 @@ export async function listBackupPans(locationId: string): Promise<Pan[]> {
 export async function listDisplayPans(locationId: string): Promise<Pan[]> {
   const pans = await listStorePans(locationId);
   return pans.filter(isActiveDisplayAssignment);
+}
+
+export async function listEodDisplayPanRows(locationId: string, businessDate: string): Promise<EodDisplayPanRow[]> {
+  const [activeDisplayPans, movements, existingCount] = await Promise.all([
+    listDisplayPans(locationId),
+    listDisplayMovements(locationId),
+    findEodCount(locationId, businessDate),
+  ]);
+  const existingItems = existingCount ? await listEodItems(existingCount.id) : [];
+  const existingWeightByPanId = new Map(
+    existingItems
+      .filter((item) => item.panId)
+      .map((item): [string, number] => [item.panId!, item.weightKg ?? 0]),
+  );
+  const todayMovements = movements.filter((movement) => dateKey(movement.movedAt) === businessDate);
+  const latestMovementByPanId = new Map<string, DisplayMovement>();
+
+  todayMovements.forEach((movement) => {
+    const existing = latestMovementByPanId.get(movement.panId);
+    if (!existing || new Date(movement.movedAt).getTime() > new Date(existing.movedAt).getTime()) {
+      latestMovementByPanId.set(movement.panId, movement);
+    }
+  });
+
+  const activePanIds = activeDisplayPans.map((pan) => pan.id);
+  const movementPanIds = todayMovements.map((movement) => movement.panId);
+  const existingPanIds = existingItems.map((item) => item.panId).filter((panId): panId is string => Boolean(panId));
+  const panIds = [...new Set([...activePanIds, ...movementPanIds, ...existingPanIds])];
+  const knownPans = new Map(activeDisplayPans.map((pan): [string, Pan] => [pan.id, pan]));
+  const missingPanIds = panIds.filter((panId) => !knownPans.has(panId));
+  const missingPans = await listPansByIds(missingPanIds);
+  missingPans.forEach((pan) => knownPans.set(pan.id, pan));
+
+  return panIds
+    .map((panId) => {
+      const pan = knownPans.get(panId);
+      if (!pan) return null;
+
+      const movement = latestMovementByPanId.get(pan.id);
+      const existingWeightKg = existingWeightByPanId.get(pan.id);
+      const fallbackCorrectionCeiling = existingWeightKg !== undefined ? pan.fullWeightKg ?? 0 : 0;
+      const openingWeightKg =
+        movement?.weightKg ?? Math.max(pan.currentWeightKg ?? 0, existingWeightKg ?? 0, fallbackCorrectionCeiling);
+      return {
+        pan,
+        openingWeightKg,
+        lockedEmpty: !pan.active || pan.status === "closed",
+      };
+    })
+    .filter((row): row is EodDisplayPanRow => Boolean(row))
+    .sort((a, b) => {
+      const flavour = a.pan.flavourId.localeCompare(b.pan.flavourId);
+      if (flavour !== 0) return flavour;
+      return a.pan.panId.localeCompare(b.pan.panId);
+    });
 }
 
 export async function listDisplayMovements(locationId?: string): Promise<DisplayMovement[]> {
@@ -747,7 +1009,12 @@ export async function movePanToDisplay(input: DisplayMovementInput): Promise<Dis
     toRole: "display",
     weightKg: displayWeightKg,
     recordedBy: input.actorId,
-    metadata: { fillState, movementId: movement.id },
+    metadata: {
+      fillState,
+      movementId: movement.id,
+      fifoOverride: Boolean(input.fifoOverride),
+      recommendedPanUuid: input.recommendedPanUuid ?? null,
+    },
   });
   await updatePanState(pan.id, {
     currentWeightKg: displayWeightKg,
@@ -770,6 +1037,8 @@ function displayMovementForPan(input: SwapDisplayPanInput, pan: Pan): DisplayMov
     actorId: input.actorId,
     actorRole: input.actorRole,
     actorLocationId: input.actorLocationId,
+    fifoOverride: input.fifoOverride,
+    recommendedPanUuid: input.recommendedPanUuid,
   };
 }
 
@@ -898,6 +1167,7 @@ async function normalizeEodItemsForLifecycle(
   input: EodCountInput,
   displayPans: Pan[],
   existingItems: EodCountItem[],
+  openingWeightByPanId: Map<string, number> = new Map(),
 ): Promise<{ items: NormalizedEodItem[]; panById: Map<string, Pan> }> {
   const displayPanById = new Map(displayPans.map((pan) => [pan.id, pan]));
   const existingPanIds = new Set(existingItems.map((item) => item.panId).filter((panId): panId is string => Boolean(panId)));
@@ -938,6 +1208,31 @@ async function normalizeEodItemsForLifecycle(
     throw new Error("End-of-day gelato counts can only include active flavours or display pans.");
   }
 
+  const closedPanItem = normalizedBaseItems.find((item) => {
+    if (!item.panUuid || item.weightKg <= 0) return false;
+    const pan = panById.get(item.panUuid);
+    return Boolean(pan && (!pan.active || pan.status === "closed") && !existingPanIds.has(item.panUuid));
+  });
+  if (closedPanItem) {
+    const pan = panById.get(closedPanItem.panUuid!);
+    throw new Error(`${pan?.panId ?? "This pan"} is already marked empty. Its EOD weight must stay 0 kg.`);
+  }
+
+  const overOpeningItem = normalizedBaseItems.find((item) => {
+    if (!item.panUuid) return false;
+    const pan = panById.get(item.panUuid);
+    if (!pan) return false;
+    const openingWeightKg = openingWeightByPanId.get(item.panUuid) ?? displayCapacityKg(pan);
+    return item.weightKg > openingWeightKg;
+  });
+  if (overOpeningItem) {
+    const pan = panById.get(overOpeningItem.panUuid!);
+    const openingWeightKg = openingWeightByPanId.get(overOpeningItem.panUuid!) ?? (pan ? displayCapacityKg(pan) : 0);
+    throw new Error(
+      `EOD weight for ${pan?.panId ?? "this pan"} cannot be higher than opening weight (${formatWeightKg(openingWeightKg)} kg).`,
+    );
+  }
+
   const inferredItems = normalizedBaseItems.flatMap((item): NormalizedEodItem[] => {
     if (item.panUuid) {
       return [{ panUuid: item.panUuid, flavourId: item.flavourId, weightKg: item.weightKg, notes: item.notes ?? null }];
@@ -955,7 +1250,10 @@ async function normalizeEodItemsForLifecycle(
       ];
     }
 
-    const totalCapacityKg = flavourDisplayPans.reduce((sum, pan) => sum + displayCapacityKg(pan), 0);
+    const totalCapacityKg = flavourDisplayPans.reduce(
+      (sum, pan) => sum + (openingWeightByPanId.get(pan.id) ?? displayCapacityKg(pan)),
+      0,
+    );
     if (item.weightKg > totalCapacityKg) {
       return [
         {
@@ -987,7 +1285,7 @@ async function normalizeEodItemsForLifecycle(
     });
 
     newestFirst.forEach((pan) => {
-      const allocated = Math.min(displayCapacityKg(pan), remainingWeightKg);
+      const allocated = Math.min(openingWeightByPanId.get(pan.id) ?? displayCapacityKg(pan), remainingWeightKg);
       allocationByPanId.set(pan.id, allocated);
       remainingWeightKg -= allocated;
     });
@@ -1027,11 +1325,18 @@ export async function submitEodGelatoCount(input: EodCountInput): Promise<EodCou
     assertCanCorrectCount(input, input.businessDate);
   }
 
-  const [displayPans, existingItems] = await Promise.all([
-    listDisplayPans(input.locationId),
+  const [displayPanRows, existingItems] = await Promise.all([
+    listEodDisplayPanRows(input.locationId, input.businessDate),
     existing ? listEodItems(existing.id) : Promise.resolve([]),
   ]);
-  const { items: normalizedItems, panById } = await normalizeEodItemsForLifecycle(input, displayPans, existingItems);
+  const openingWeightByPanId = new Map(displayPanRows.map((row): [string, number] => [row.pan.id, row.openingWeightKg]));
+  const displayPans = displayPanRows.map((row) => row.pan);
+  const { items: normalizedItems, panById } = await normalizeEodItemsForLifecycle(
+    input,
+    displayPans,
+    existingItems,
+    openingWeightByPanId,
+  );
 
   const count = existing
     ? await updateEodCount(existing.id, {
@@ -1060,6 +1365,10 @@ async function finalizeEodDisplayPans(
       .map(async (item) => {
         const pan = panById.get(item.panUuid!);
         if (!pan) return;
+
+        if (!pan.active && pan.status === "closed" && item.weightKg <= 0) {
+          return;
+        }
 
         if (item.weightKg <= 0) {
           await recordPanEvent({

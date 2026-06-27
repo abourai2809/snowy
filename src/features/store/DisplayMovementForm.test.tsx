@@ -271,13 +271,13 @@ describe("store display movement", () => {
     );
 
     await user.selectOptions(screen.getByLabelText("Flavour"), pistachio!.id);
-    const panSelect = screen.getByLabelText("Pan ID");
-    expect(within(panSelect).getByRole("option", { name: /PIS-20260523-02/ })).toBeInTheDocument();
-    expect(within(panSelect).queryByRole("option", { name: /BEL-20260523-01/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Recommended FIFO pan")).toBeInTheDocument();
+    expect(screen.getByText("PIS-20260523-02")).toBeInTheDocument();
+    expect(screen.queryByText("BEL-20260523-01")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Override pan ID")).not.toBeInTheDocument();
     expect(screen.getByText("Current display pan")).toBeInTheDocument();
     expect(screen.getByText(/PIS-20260523-01/)).toBeInTheDocument();
 
-    await user.selectOptions(panSelect, replacementPanUuid);
     await user.clear(screen.getByLabelText(/Checkout weight PIS-20260523-01/));
     await user.type(screen.getByLabelText(/Checkout weight PIS-20260523-01/), "1.2");
     await user.click(screen.getByRole("button", { name: "Swap pan" }));
@@ -320,10 +320,10 @@ describe("store display movement", () => {
     );
 
     await user.selectOptions(screen.getByLabelText("Flavour"), pistachio!.id);
-    const panSelect = screen.getByLabelText("Pan ID");
-    expect(within(panSelect).getByRole("option", { name: /Recommended FIFO - PISTACHTO - PIS-20260523-02/ })).toBeInTheDocument();
+    expect(screen.getByText("Recommended FIFO pan")).toBeInTheDocument();
+    expect(screen.getByText("PIS-20260523-02")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Override pan ID")).not.toBeInTheDocument();
 
-    await user.selectOptions(panSelect, replacementPanUuid);
     await user.selectOptions(screen.getByLabelText("Checkout"), "too_low");
     expect(screen.queryByLabelText(/Checkout weight/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Swap pan" }));
@@ -332,6 +332,69 @@ describe("store display movement", () => {
     await expect(listDisplayPans("malsi")).resolves.toEqual([expect.objectContaining({ id: replacementPanUuid })]);
     await expect(listBackupPans("malsi")).resolves.not.toEqual(expect.arrayContaining([expect.objectContaining({ id: currentPanUuid })]));
     await expect(listEmptyPanCountsByStore("malsi")).resolves.toEqual([{ locationId: "malsi", emptyPanCount: 1 }]);
+  });
+
+  it("allows manager-directed FIFO override with warning and audit metadata", async () => {
+    const user = userEvent.setup();
+    const [currentPanUuid, recommendedPanUuid, overridePanUuid] = await seedAcceptedStorePans(3, "PIS");
+    await movePanToDisplay({
+      panUuid: currentPanUuid,
+      storeLocationId: "malsi",
+      fillState: "full",
+      weightKg: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+    const [flavours, backupPans, displayPans] = await Promise.all([
+      listFlavours(true),
+      listBackupPans("malsi"),
+      listDisplayPans("malsi"),
+    ]);
+    const pistachio = flavours.find((flavour) => flavour.shortCode === "PIS");
+    expect(pistachio).toBeDefined();
+
+    renderApp(
+      <DisplayMovementForm
+        locationId="malsi"
+        backupPans={backupPans}
+        displayPans={displayPans}
+        flavours={flavours}
+        onChanged={() => undefined}
+        actorId="staff-store"
+        actorRole="store_staff"
+        actorLocationId="malsi"
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText("Flavour"), pistachio!.id);
+    expect(screen.getByText("PIS-20260523-02")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Override FIFO" }));
+    const overrideSelect = screen.getByLabelText("Override pan ID");
+    expect(within(overrideSelect).getByRole("option", { name: /PIS-20260523-02 \(FIFO\)/ })).toBeInTheDocument();
+    expect(within(overrideSelect).getByRole("option", { name: /PIS-20260523-03/ })).toBeInTheDocument();
+    await user.selectOptions(overrideSelect, overridePanUuid);
+    expect(screen.getByText("This is not FIFO. Use this only if a manager told you to.")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Checkout"), "too_low");
+    await user.click(screen.getByRole("button", { name: "Swap pan" }));
+
+    await waitFor(() => expect(screen.getByText("Display pan swapped.")).toBeInTheDocument());
+    await expect(listDisplayPans("malsi")).resolves.toEqual([expect.objectContaining({ id: overridePanUuid })]);
+    const events = await listPanEvents("malsi");
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          panUuid: overridePanUuid,
+          eventType: "moved_to_display",
+          metadata: expect.objectContaining({
+            fifoOverride: true,
+            recommendedPanUuid,
+          }),
+        }),
+      ]),
+    );
   });
 });
 

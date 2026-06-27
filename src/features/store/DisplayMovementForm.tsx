@@ -28,6 +28,7 @@ export function DisplayMovementForm({
 }: DisplayMovementFormProps) {
   const [flavourId, setFlavourId] = useState("");
   const [panUuid, setPanUuid] = useState("");
+  const [fifoOverride, setFifoOverride] = useState(false);
   const [checkoutMode, setCheckoutMode] = useState<CheckoutMode>("partial");
   const [checkoutWeightKg, setCheckoutWeightKg] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -37,10 +38,14 @@ export function DisplayMovementForm({
     () => backupPans.filter((pan) => pan.flavourId === flavourId && !isActiveDisplayAssignment(pan)),
     [backupPans, flavourId],
   );
+  const recommendedPan = candidatePans[0] ?? null;
+  const selectedPanUuid = fifoOverride ? panUuid : recommendedPan?.id ?? "";
+  const selectedOverridePan = candidatePans.find((pan) => pan.id === panUuid) ?? null;
+  const isFifoOverride = Boolean(fifoOverride && recommendedPan && panUuid && panUuid !== recommendedPan.id);
   const currentDisplayPan = displayPans.find((pan) => pan.flavourId === flavourId) ?? null;
   const canSubmit = Boolean(
     flavourId &&
-      panUuid &&
+      selectedPanUuid &&
       (!currentDisplayPan ||
         checkoutMode === "empty" ||
         checkoutMode === "too_low" ||
@@ -51,8 +56,14 @@ export function DisplayMovementForm({
   function updateFlavour(flavourIdValue: string) {
     setFlavourId(flavourIdValue);
     setPanUuid("");
+    setFifoOverride(false);
     setCheckoutMode("partial");
     setCheckoutWeightKg("");
+  }
+
+  function toggleFifoOverride() {
+    setPanUuid("");
+    setFifoOverride((current) => !current);
   }
 
   useEffect(() => {
@@ -64,6 +75,13 @@ export function DisplayMovementForm({
     );
   }, [currentDisplayPan?.currentWeightKg, currentDisplayPan?.id]);
 
+  useEffect(() => {
+    if (!fifoOverride) return;
+    if (panUuid && !candidatePans.some((pan) => pan.id === panUuid)) {
+      setPanUuid("");
+    }
+  }, [candidatePans, fifoOverride, panUuid]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -71,7 +89,7 @@ export function DisplayMovementForm({
 
     try {
       await swapPanToDisplay({
-        panUuid,
+        panUuid: selectedPanUuid,
         storeLocationId: locationId,
         checkoutPanUuid: currentDisplayPan?.id ?? null,
         checkoutWeightKg: currentDisplayPan
@@ -79,6 +97,8 @@ export function DisplayMovementForm({
             ? 0
             : Number(checkoutWeightKg || (currentDisplayPan.currentWeightKg ?? 0))
           : null,
+        fifoOverride: isFifoOverride,
+        recommendedPanUuid: recommendedPan?.id ?? null,
         actorId,
         actorRole,
         actorLocationId,
@@ -86,6 +106,7 @@ export function DisplayMovementForm({
       setMessage(currentDisplayPan ? "Display pan swapped." : "Pan moved to display.");
       setFlavourId("");
       setPanUuid("");
+      setFifoOverride(false);
       setCheckoutMode("partial");
       setCheckoutWeightKg("");
       onChanged();
@@ -111,22 +132,46 @@ export function DisplayMovementForm({
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>Pan ID</span>
-          <select value={panUuid} onChange={(event) => setPanUuid(event.target.value)} required disabled={!flavourId}>
-            <option value="">Select deep freezer pan</option>
-            {candidatePans.map((pan) => (
-              <option value={pan.id} key={pan.id}>
-                {pan.id === candidatePans[0]?.id ? "Recommended FIFO - " : ""}
-                {flavourById.get(pan.flavourId)?.name ?? "Unknown flavour"} - {pan.panId}
-                {isPartialDeepFreezerPan(pan) ? " (partial deep)" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
+        {recommendedPan ? (
+          <div className="recommended-pan-card">
+            <span>Recommended FIFO pan</span>
+            <strong>{recommendedPan.panId}</strong>
+            {isPartialDeepFreezerPan(recommendedPan) ? <small>Partial pan in deep freezer</small> : <small>Oldest pan first</small>}
+          </div>
+        ) : null}
 
         {flavourId && candidatePans.length === 0 ? (
           <p className="muted-copy">No deep freezer pan IDs available for this flavour.</p>
+        ) : null}
+
+        {recommendedPan ? (
+          <div className="override-panel">
+            <button className="secondary-button" type="button" onClick={toggleFifoOverride}>
+              {fifoOverride ? "Use FIFO pan" : "Override FIFO"}
+            </button>
+            {fifoOverride ? (
+              <>
+                <label className="field compact-field">
+                  <span>Override pan ID</span>
+                  <select value={panUuid} onChange={(event) => setPanUuid(event.target.value)} required>
+                    <option value="">Choose another pan</option>
+                    {candidatePans.map((pan) => (
+                      <option value={pan.id} key={pan.id}>
+                        {pan.panId}
+                        {pan.id === recommendedPan.id ? " (FIFO)" : ""}
+                        {isPartialDeepFreezerPan(pan) ? " (partial)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {selectedOverridePan && selectedOverridePan.id !== recommendedPan.id ? (
+                  <div className="alert alert-danger">
+                    This is not FIFO. Use this only if a manager told you to.
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
         ) : null}
 
         {currentDisplayPan ? (

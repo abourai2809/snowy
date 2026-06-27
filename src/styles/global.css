@@ -593,6 +593,11 @@ button {
   gap: 8px;
 }
 
+.pan-weight-grid {
+  display: grid;
+  gap: 8px;
+}
+
 .pan-id-token {
   display: inline-flex;
   align-items: center;
@@ -610,6 +615,99 @@ button {
 .list-stack {
   display: grid;
   gap: 8px;
+}
+
+.dispatch-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.dispatch-code {
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.incoming-pan-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.incoming-flavour-group {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pkll);
+}
+
+.incoming-flavour-group strong {
+  color: var(--pkdd);
+  font-size: 15px;
+}
+
+.incoming-pan-list {
+  display: grid;
+  gap: 5px;
+}
+
+.incoming-pan-row {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 249, 245, 0.72);
+}
+
+.incoming-pan-row small {
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.incoming-pan-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.large-pan-id {
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.recommended-pan-card,
+.override-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.recommended-pan-card {
+  padding: 12px;
+  border: 1px solid rgba(123, 191, 191, 0.42);
+  border-radius: 10px;
+  background: var(--tlll);
+}
+
+.recommended-pan-card span,
+.recommended-pan-card small {
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.recommended-pan-card strong {
+  color: var(--tldd);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 17px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
 }
 
 .list-row,
@@ -640,6 +738,27 @@ button {
   font-size: 12px;
 }
 
+.list-row .dispatch-summary {
+  gap: 10px;
+}
+
+.list-row .incoming-pan-groups {
+  gap: 10px;
+}
+
+.list-row .incoming-flavour-group {
+  gap: 6px;
+}
+
+.list-row .incoming-pan-list {
+  gap: 5px;
+}
+
+.list-row .large-pan-id {
+  color: var(--ink);
+  font-size: 16px;
+}
+
 .vertical-row {
   display: grid;
   align-items: stretch;
@@ -648,6 +767,16 @@ button {
 .vertical-row .secondary-button {
   width: 100%;
   margin-top: 9px;
+}
+
+.vertical-row .incoming-pan-actions .secondary-button,
+.vertical-row .incoming-pan-row > .secondary-button,
+.compact-button {
+  width: auto;
+  min-height: 34px;
+  margin-top: 0;
+  padding: 0 8px;
+  font-size: 11px;
 }
 
 .badge {

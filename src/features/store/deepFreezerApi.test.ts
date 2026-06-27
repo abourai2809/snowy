@@ -10,7 +10,13 @@ import {
   submitDeepFreezerCount,
 } from "./deepFreezerApi";
 import { createDispatch, createProduction, resetDemoLabData } from "../lab/labApi";
-import { acceptIncomingDispatch, movePanToDisplay, resetDemoStoreData, submitEodGelatoCount } from "./storeApi";
+import {
+  acceptIncomingDispatch,
+  movePanToDisplay,
+  receiveIncomingDispatchPans,
+  resetDemoStoreData,
+  submitEodGelatoCount,
+} from "./storeApi";
 
 describe("deep freezer inventory", () => {
   beforeEach(() => {
@@ -239,6 +245,46 @@ describe("deep freezer inventory", () => {
         receivedWeightKg: 3,
         displayMovedWeightKg: 3,
         displayReturnedWeightKg: 1,
+        currentWeightKg: 3,
+      }),
+    );
+  });
+
+  it("projects only accepted pan weights from a partially received dispatch", async () => {
+    const flavour = (await listFlavours(true)).find((item) => item.shortCode === "PIS");
+    expect(flavour).toBeDefined();
+
+    const production = await createProduction({
+      flavour: flavour!,
+      productionDate: "2026-05-24",
+      panWeightsKg: [3, 4],
+      notes: null,
+      producedBy: "staff-lab",
+    });
+    const dispatch = await createDispatch({
+      panUuids: production.pans.map((pan) => pan.id),
+      toLocationId: "malsi",
+      dispatchedBy: "staff-lab",
+      notes: null,
+    });
+
+    await receiveIncomingDispatchPans({
+      dispatchId: dispatch.id,
+      locationId: "malsi",
+      decisions: [
+        { panUuid: production.pans[0].id, status: "accepted" },
+        { panUuid: production.pans[1].id, status: "missing" },
+      ],
+      notes: null,
+      actorId: "staff-store",
+      actorRole: "store_staff",
+      actorLocationId: "malsi",
+    });
+
+    const balances = await listProjectedDeepFreezerBalances("malsi");
+    expect(balances.find((item) => item.flavourId === flavour!.id)).toEqual(
+      expect.objectContaining({
+        receivedWeightKg: 3,
         currentWeightKg: 3,
       }),
     );
