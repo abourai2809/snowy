@@ -22,6 +22,7 @@ describe("StoreDashboard", () => {
     await user.click(screen.getByRole("button", { name: "Store" }));
 
     expect(await screen.findByRole("button", { name: "Morning check" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Move outside store" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Confirm Malsi" })).not.toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Morning inventory verification form" })).not.toBeInTheDocument();
 

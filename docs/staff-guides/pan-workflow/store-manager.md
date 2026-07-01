@@ -41,8 +41,23 @@ If staff marked one pan missing or rejected by mistake:
 
 Only do this if the physical pan is really in the store.
 
+## 4. Send Pan For Event/B2B
+
+Use this when a pan is leaving store backup for an event or B2B order.
+
+1. Sign in as **Store Manager**.
+2. Check in to the store.
+3. Tap **Store**.
+4. Tap **Move outside store**.
+5. Choose the flavour and pan ID.
+6. Enter the event or B2B name.
+7. Tap **Move pan out**.
+
+After this, the pan is not part of store FIFO backup.
+
 ## Remember
 
 - Staff can make mistakes. Correct same-day EOD in the app.
 - Check physical pans before resolving a mismatch.
+- Use **Move outside store** only when the pan is actually leaving for event/B2B.
 - If the problem is old or unclear, ask Admin.

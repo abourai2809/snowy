@@ -61,7 +61,21 @@ Old pan app mein empty count hoga.
 
 **Override FIFO** sirf tab use karo jab Store Manager bole.
 
-## 6. EOD Gelato Weight Enter Karo
+## 6. Event/B2B Ke Liye Pan Store Se Bahar Bhejo
+
+Ye sirf tab karo jab Store Manager ya Admin bole.
+
+1. **Store** tap karo.
+2. **Move outside store** tap karo.
+3. Flavour choose karo.
+4. Pan ID choose karo.
+5. Destination **Event/B2B** hona chahiye.
+6. Event ya B2B ka naam enter karo.
+7. **Move pan out** tap karo.
+
+Iske baad ye pan store FIFO mein use nahi hoga.
+
+## 7. EOD Gelato Weight Enter Karo
 
 1. **Store** tap karo.
 2. **EOD gelato weights** tap karo.
@@ -74,7 +88,7 @@ App jo **Opening** weight dikhata hai, usse zyada weight enter mat karo.
 
 ![Store EOD gelato weight](images/store-eod-gelato-weight.png)
 
-## 7. Physical Empty Pans Count Karo
+## 8. Physical Empty Pans Count Karo
 
 Ye beginning of day ya end of day mein karo.
 
@@ -87,7 +101,7 @@ Agar number app se match nahi hota, to app review ke liye flag karega.
 
 ![Store empty pan count](images/store-empty-pan-count.png)
 
-## 8. Empty Pans Lab Ko Wapas Bhejo
+## 9. Empty Pans Lab Ko Wapas Bhejo
 
 1. **Store** tap karo.
 2. **Return empties** tap karo.
@@ -103,7 +117,7 @@ Sirf woh pans enter karo jo physically store se lab ja rahe hain.
 - Manager na bole to hamesha recommended FIFO pan choose karo.
 - **Incoming pans** mein agar sirf ek pan missing ya wrong hai, to poori dispatch reject mat karo.
 - Agar pan mein bahut kam gelato hai, to **Too low, mark empty** use karo.
+- Pan ko store ke bahar sirf Event/B2B ke liye bhejo, aur sirf manager/Admin ke bolne par.
 - Weights **kg** mein enter karo, grams mein nahi.
 - EOD par app jo har pan dikhata hai, uska weight enter karo.
 - Agar kuch galat lag raha hai, to Store Manager ko batao.
-

@@ -61,7 +61,21 @@ The old pan will count as empty in the app.
 
 Use **Override FIFO** only when Store Manager tells you.
 
-## 6. Enter EOD Gelato Weight
+## 6. Move Pan Outside Store For Event/B2B
+
+Use this only when Store Manager or Admin tells you.
+
+1. Tap **Store**.
+2. Tap **Move outside store**.
+3. Choose the flavour.
+4. Choose the pan ID.
+5. Check destination is **Event/B2B**.
+6. Enter event or B2B name.
+7. Tap **Move pan out**.
+
+This pan will not be used for store FIFO after this.
+
+## 7. Enter EOD Gelato Weight
 
 1. Tap **Store**.
 2. Tap **EOD gelato weights**.
@@ -74,7 +88,7 @@ Do not enter a weight higher than the **Opening** weight shown by the app.
 
 ![Store EOD gelato weight](images/store-eod-gelato-weight.png)
 
-## 7. Count Physical Empty Pans
+## 8. Count Physical Empty Pans
 
 Do this at beginning of day or end of day.
 
@@ -87,7 +101,7 @@ If the number does not match the app, the app will flag it for review.
 
 ![Store empty pan count](images/store-empty-pan-count.png)
 
-## 8. Send Empty Pans Back To Lab
+## 9. Send Empty Pans Back To Lab
 
 1. Tap **Store**.
 2. Tap **Return empties**.
@@ -103,6 +117,7 @@ Only enter pans that are physically leaving the store.
 - Always choose the recommended FIFO pan unless a manager tells you otherwise.
 - In **Incoming pans**, do not reject the whole dispatch if only one pan is missing or wrong.
 - If a pan has very little gelato, use **Too low, mark empty**.
+- Move a pan outside store only for event/B2B and only when manager/Admin tells you.
 - Enter weights in **kg**, not grams.
 - At EOD, enter weight for each pan shown by the app.
 - If something looks wrong, tell Store Manager.

@@ -17,6 +17,7 @@ import { EodGelatoCount } from "./EodGelatoCount";
 import { EmptyPanPhysicalCountForm } from "./EmptyPanPhysicalCountForm";
 import { EmptyPanReturnForm } from "./EmptyPanReturnForm";
 import { MorningInventoryVerification } from "./MorningInventoryVerification";
+import { OutsideStoreMovementForm } from "./OutsideStoreMovementForm";
 import {
   listBackupPans,
   listDisplayPans,
@@ -32,6 +33,7 @@ const STORE_ACTIONS = [
   { id: "morning-inventory-check", label: "Morning check", workflowName: "morning inventory check" },
   { id: "urgent-requirement", label: "Urgent need", workflowName: "urgent requirement" },
   { id: "move-to-display", label: "Move to display", workflowName: "move to display" },
+  { id: "move-outside-store", label: "Move outside store", workflowName: "move pan outside store" },
   { id: "deep-freezer-weights", label: "Deep freezer count", workflowName: "EOD deep freezer weights" },
   { id: "eod-gelato-weights", label: "EOD gelato weights", workflowName: "EOD gelato weights" },
   { id: "empty-pan-count", label: "Empty pan count", workflowName: "physical empty pan count" },
@@ -287,6 +289,16 @@ function renderStoreAction({
           locationId={locationId}
           backupPans={backupPans}
           displayPans={displayPans}
+          flavours={flavours}
+          onChanged={() => void load()}
+        />
+      );
+    case "move-outside-store":
+      return (
+        <OutsideStoreMovementForm
+          {...actor}
+          locationId={locationId}
+          backupPans={backupPans}
           flavours={flavours}
           onChanged={() => void load()}
         />

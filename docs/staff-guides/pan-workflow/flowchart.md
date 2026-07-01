@@ -54,6 +54,16 @@ flowchart TB
     D18["Block and send to review"]
   end
 
+  subgraph OUTSIDE["Store Staff / Store Manager: Move Outside Store"]
+    direction TB
+    O1["Tap Move outside store"]
+    O2["Choose flavour and pan ID"]
+    O3["Destination: Event/B2B"]
+    O4["Enter event/B2B name"]
+    O5["Pan marked event/reserved"]
+    O6["Removed from store FIFO backup"]
+  end
+
   subgraph EOD["Store Staff / Store Manager: EOD Gelato Weight"]
     direction TB
     E1["App lists every pan displayed today"]
@@ -106,6 +116,11 @@ flowchart TB
   R9 -- "Yes" --> R10 --> D1
   R9 -- "No" --> R11 --> A4
 
+  R3 -. "Event/B2B need" .-> O1
+  R5 -. "Event/B2B need" .-> O1
+  R10 -. "Event/B2B need" .-> O1
+  O1 --> O2 --> O3 --> O4 --> O5 --> O6 --> END
+
   D1 --> D2 --> D3
   D3 -- "No" --> D4
   D3 -- "Yes" --> D5
@@ -151,7 +166,7 @@ flowchart TB
   classDef endNode fill:#ecfccb,stroke:#65a30d,color:#0f172a;
 
   class L1,L2,L3,L4,L5,L6,L7 lab;
-  class R1,R3,R4,R5,R6,R7,R8,R10,D1,D2,D4,D6,D7,D8,D11,D12,D14,D15,D17,E1,E2,E6,E7,P1,P2,P4,P6,P7 store;
+  class R1,R3,R4,R5,R6,R7,R8,R10,D1,D2,D4,D6,D7,D8,D11,D12,D14,D15,D17,O1,O2,O3,O4,O5,O6,E1,E2,E6,E7,P1,P2,P4,P6,P7 store;
   class E8 manager;
   class A1,A2,A3,A4,A5,X2,X3,X4,X5 admin;
   class R2,R9,D3,D5,D10,D13,D16,E3,E5,X1,P3 decision;

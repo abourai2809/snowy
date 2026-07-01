@@ -13,7 +13,7 @@ This document is the working product feature inventory for Snowy Owl Gelato Oper
 
 - Admin: manages catalog, locations, staff, attendance settings, correction workflows, reports, and QueueBuster job requests.
 - Lab Staff/Lab Manager: records production, sees lab inventory, dispatches available pans to stores, and receives empty-pan returns from stores.
-- Store Staff: checks in to a store, receives incoming dispatches, moves backup pans to display, submits EOD gelato weights, submits deep-freezer/morning counts, records physical empty-pan counts, returns empty pans to lab, submits supply counts, and logs urgent requirements.
+- Store Staff: checks in to a store, receives incoming dispatches, moves backup pans to display, moves backup pans outside store for event/B2B use, submits EOD gelato weights, submits deep-freezer/morning counts, records physical empty-pan counts, returns empty pans to lab, submits supply counts, and logs urgent requirements.
 - Store Manager: performs store workflows and can correct same-day store submissions.
 
 ## Admin Features
@@ -108,6 +108,7 @@ Detailed pan lifecycle rules are documented in [pan-workflow.md](pan-workflow.md
 - Missing/rejected pan decisions can be overturned one pan at a time if the pan is later found or the rejection was a mistake.
 - Move a deep-freezer pan to display by choosing flavour first; the app shows the FIFO-recommended pan ID from the oldest eligible store backup pan for that flavour.
 - Store staff can use a manager-directed FIFO override path, which warns staff and logs the recommended pan.
+- Store staff/store managers can move a selected backup/deep-freezer pan outside store for event/B2B use; this marks the pan reserved for event/B2B and removes it from store FIFO backup circulation.
 - Each store can have only one active display-assigned pan per flavour.
 - Each store can have only one open or partial pan per flavour.
 - A display-assigned pan keeps its pan ID attached to that flavour until it is explicitly checked out of display.
@@ -137,6 +138,7 @@ Detailed pan lifecycle rules are documented in [pan-workflow.md](pan-workflow.md
 - Empty pan count is backend-calculated by store from closed zero-weight pans minus active empty-pan returns sent to the lab.
 - Store staff can record beginning-of-day or end-of-day physical empty-pan counts. A mismatch from the app-calculated count is flagged for Store Manager/Admin review.
 - Store staff can send empty pans back to the lab by quantity; lab staff accept or dispute the return.
+- Inter-store pan transfer dispatch/receipt and event/B2B return/closure workflows are tracked as follow-up work in issue #57.
 - Detailed pan-to-pan consolidation/refill tracking is deferred.
 
 ## Store Deep-Freezer And Requirements

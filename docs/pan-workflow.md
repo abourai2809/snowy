@@ -22,6 +22,7 @@ This document is the product reference for the end-to-end journey of a gelato pa
 - `store_backup`: accepted by store and physically in backup/deep freezer.
 - `display_assigned`: active display pan for a store and flavour.
 - `partial_open`: non-empty opened pan returned to deep freezer.
+- `event_reserved`: pan has left store backup for event/B2B use and should not be used by store FIFO.
 - `depleted_empty`: closed zero-weight pan counted as an empty pan at the store.
 - `empty_return_in_transit`: empty pans sent from store back to lab, awaiting lab receipt.
 - `lab_empty_received`: lab has accepted returned empty pans.
@@ -63,6 +64,14 @@ The old pan can be handled three ways:
 - Empty: mark depleted/empty and increase the app-calculated empty-pan count.
 - Too low: treat as depleted/empty even if a small physical amount remains, then increase the app-calculated empty-pan count.
 - Still usable partial: keep it as the one open/partial pan for that store and flavour, unless that would violate the one-open-partial rule.
+
+### Move Pan Outside Store For Event/B2B
+
+Store staff or Store Manager can move a backup/deep-freezer pan outside store for event/B2B use. Staff choose the flavour, choose an eligible store backup pan ID, choose destination type `Event/B2B`, and enter the event/B2B name.
+
+The app records a `moved_outside_store` pan lifecycle event, marks the pan `event/reserved`, clears its current store location, and removes it from store backup/FIFO circulation. The pan should not appear in store backup counts or be recommended for display until a future return/closure workflow brings it back.
+
+This implementation is event/B2B only. Inter-store pan transfer dispatch/receipt and event/B2B return/closure remain tracked in #57.
 
 ### EOD Gelato Count
 
@@ -113,6 +122,4 @@ Creating an active return decreases the store app-calculated empty-pan count imm
 
 - #12: Deferred morning inventory verification.
 - #34: Deferred pan-to-pan consolidation/refill tracking.
-- #51: Warn and notify Admin on partial pan rule violations. Product decision is now one open/partial pan, not two.
-- #52: Track empty pan returns from stores to lab.
-- #53: Reconcile physical empty-pan counts against app-calculated empties.
+- #57: Move pan outside store. Current implementation covers event/B2B outbound only; inter-store transfer and return/closure are still pending.

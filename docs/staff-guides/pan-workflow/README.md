@@ -28,5 +28,6 @@ The feature flowchart is for owners and managers:
 - **FIFO**: use the oldest pan first.
 - **Display pan**: the pan currently kept in the display freezer.
 - **Too low**: very little gelato is left. The app treats this pan as empty.
+- **Move outside store**: send a backup pan out for event/B2B so store FIFO will not use it.
 - **Empty pan count**: how many empty pans the app thinks are in the store.
 - **Physical count**: how many empty pans staff can see in the store.

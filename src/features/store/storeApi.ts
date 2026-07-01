@@ -69,6 +69,17 @@ export interface DisplayMovementInput extends StoreActor {
   recommendedPanUuid?: string | null;
 }
 
+export type OutsideStoreDestinationType = "event_b2b";
+
+export interface MovePanOutsideStoreInput extends StoreActor {
+  panUuid: string;
+  storeLocationId: string;
+  destinationType: OutsideStoreDestinationType;
+  eventName: string;
+  eventDate: string | null;
+  notes: string | null;
+}
+
 export interface CheckoutDisplayPanInput extends StoreActor {
   panUuid: string;
   storeLocationId: string;
@@ -1082,6 +1093,49 @@ export async function swapPanToDisplay(input: SwapDisplayPanInput): Promise<Disp
   }
 
   return movePanToDisplay(movementInput);
+}
+
+export async function movePanOutsideStore(input: MovePanOutsideStoreInput): Promise<Pan> {
+  assertStoreLocation(input, input.storeLocationId);
+
+  if (input.destinationType !== "event_b2b") {
+    throw new Error("Only event/B2B pan movement is available right now.");
+  }
+
+  const eventName = input.eventName.trim();
+  if (!eventName) {
+    throw new Error("Enter the event or B2B name.");
+  }
+
+  const backupPans = await listBackupPans(input.storeLocationId);
+  const pan = backupPans.find((item) => item.id === input.panUuid);
+  if (!pan) {
+    throw new Error("Only deep freezer pans in this store can be moved outside store.");
+  }
+
+  await recordPanEvent({
+    panUuid: pan.id,
+    eventType: "moved_outside_store",
+    fromLocationId: pan.currentLocationId,
+    toLocationId: null,
+    fromRole: pan.panRole,
+    toRole: "event",
+    weightKg: pan.currentWeightKg,
+    recordedBy: input.actorId,
+    metadata: {
+      destinationType: input.destinationType,
+      eventName,
+      eventDate: input.eventDate || null,
+      notes: input.notes,
+      sourceStoreLocationId: input.storeLocationId,
+    },
+  });
+
+  return updatePanState(pan.id, {
+    currentLocationId: null,
+    panRole: "event",
+    status: "reserved",
+  });
 }
 
 export async function checkoutDisplayPan(input: CheckoutDisplayPanInput): Promise<Pan> {
